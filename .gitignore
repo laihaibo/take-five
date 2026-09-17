@@ -1,0 +1,10 @@
+node_modules
+.next
+out
+dist
+release
+*.log
+.DS_Store
+data
+*.db
+.env*

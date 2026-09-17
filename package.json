@@ -1,0 +1,30 @@
+{
+  "name": "take-five",
+  "version": "0.1.0",
+  "private": true,
+  "description": "50 分钟专注后的 Liquid Glass 休息提醒 — 可推迟、可记录",
+  "main": "electron/main.mjs",
+  "scripts": {
+    "dev": "concurrently -k -n next,electron -c cyan,magenta \"pnpm dev:next\" \"pnpm dev:electron\"",
+    "dev:next": "next dev -p 3210",
+    "dev:electron": "wait-on tcp:127.0.0.1:3210 && electron .",
+    "build": "next build",
+    "start": "electron .",
+    "rebuild": "next build && electron .",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "next": "^15.1.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "concurrently": "^9.1.0",
+    "electron": "^44.4.1",
+    "typescript": "^5.7.2",
+    "wait-on": "^8.0.1"
+  }
+}
