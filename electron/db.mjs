@@ -21,7 +21,7 @@ const DEFAULTS = {
   quietHoursStart: '11:30',
   quietHoursEnd: '13:30',
   quietHoursEnabled: 'true',
-  autostartFocus: 'true',
+  autostartFocus: 'false',
   alwaysOnTop: 'false',
   theme: 'system',
 };

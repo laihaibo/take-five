@@ -241,7 +241,7 @@ function HomeApp() {
       {!state.quiet && s.workEnabled && !state.inWorkHours && (
         <div className="work-banner" role="status">
           当前不在工作时间（{s.workStart}–{s.workEnd}
-          {s.weekdaysOnly ? '，仅工作日' : ''}），可手动开始专注
+          {s.weekdaysOnly ? '，仅工作日' : ''}）· 到点自动清空，上班后点「开始专注」即可
         </div>
       )}
 

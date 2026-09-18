@@ -429,8 +429,14 @@ app.whenReady().then(async () => {
   createTray();
 
   const s = getSettings();
-  if (s.autostartFocus && isInWorkHours(s)) {
-    setTimeout(() => timer.startFocus(), 800);
+  if (isInWorkHours(s)) {
+    // 上班：默认手动点「开始专注」；仅在设置开启时自动进入
+    if (s.autostartFocus) {
+      setTimeout(() => timer.startFocus(), 800);
+    }
+  } else {
+    // 非工作时段启动：保证干净待开始
+    timer.endWorkday();
   }
 });
 

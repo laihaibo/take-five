@@ -34,7 +34,7 @@ pnpm rebuild            # build && start
 | 路径 | 职责 |
 |------|------|
 | `electron/main.mjs` | 窗口/托盘/IPC/静态 HTTP/置顶/通知 |
-| `electron/timer.mjs` | 专注 → break-prompt → break 状态机；午休顺延、非工作时段不打扰 |
+| `electron/timer.mjs` | 专注 → break-prompt → break；午休顺延；**跨 workEnd/workStart 自动清空** |
 | `electron/db.mjs` | `node:sqlite`（`DatabaseSync`），settings + focus_sessions + break_events |
 | `electron/preload.mjs` | `contextBridge` → `window.takeFive` |
 | `app/` | Next App Router UI（今日 / stats / settings） |

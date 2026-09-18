@@ -278,7 +278,7 @@ export default function SettingsPage() {
           <div className="field">
             <div className="label">
               <span>启动后自动开始专注</span>
-              <small>仅在工作时间内生效</small>
+              <small>默认关；上班后手动点开始。开启后仅工作时段自动进</small>
             </div>
             <Toggle
               checked={settings.autostartFocus}

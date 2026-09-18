@@ -64,6 +64,7 @@ export function createBreakTimer(onState) {
 
   let interval = null;
   let lastTick = Date.now();
+  let lastInWorkHours = null;
 
   function getActCopy(id) {
     return ACTIVITY_COPY[id] || ACTIVITY_COPY.eyes;
@@ -227,10 +228,18 @@ export function createBreakTimer(onState) {
   }
 
   function tick() {
-    if (state.mode !== 'focus' && state.mode !== 'break') return;
+    const s = getSettings();
     const now = Date.now();
     const delta = now - lastTick;
     lastTick = now;
+
+    checkWorkBoundary(s);
+    // endWorkday may have switched mode
+    if (state.mode === 'idle') return;
+
+    if (state.mode !== 'focus' && state.mode !== 'break') {
+      return;
+    }
     state.remainingMs = Math.max(0, state.remainingMs - delta);
     state.elapsedMs += delta;
     if (state.remainingMs <= 0) {
@@ -317,7 +326,8 @@ export function createBreakTimer(onState) {
       postponeCount: state.postponeCount,
     });
     state.cycle += 1;
-    startFocus();
+    if (isInWorkHours(getSettings())) startFocus();
+    else endWorkday();
   }
 
   function toggleCheckedActivity(id) {
@@ -351,7 +361,8 @@ export function createBreakTimer(onState) {
       completedActivities: list.length ? list : [state.suggestedActivity],
     });
     state.cycle += 1;
-    startFocus();
+    if (isInWorkHours(getSettings())) startFocus();
+    else endWorkday();
   }
 
   function pause() {
@@ -385,7 +396,57 @@ export function createBreakTimer(onState) {
     state.sessionEndsAt = null;
     state.postponeCount = 0;
     state.cycle = 0;
+    state.checkedActivities = new Set([state.suggestedActivity || 'eyes']);
     emit();
+  }
+
+  /** 下班：自动清空计时，回到待开始 */
+  function endWorkday() {
+    stopInterval();
+    cleanupFocus(state.mode === 'break' ? 'completed' : 'interrupted');
+    const s = getSettings();
+    state.mode = 'idle';
+    state.previousMode = null;
+    state.afterPostpone = false;
+    state.plannedMinutes = s.focusMinutes;
+    state.breakMinutes = s.breakMinutes;
+    state.remainingMs = s.focusMinutes * 60_000;
+    state.elapsedMs = 0;
+    state.sessionStartedAt = null;
+    state.sessionEndsAt = null;
+    state.postponeCount = 0;
+    state.cycle = 0;
+    state.focusSessionId = null;
+    emit();
+  }
+
+  /** 上班边界：残留状态兜底清空；可选自动开始 */
+  function enterWorkday(s = getSettings()) {
+    if (state.mode !== 'idle') {
+      endWorkday();
+    }
+    if (s.autostartFocus && isInWorkHours(s)) {
+      startFocus();
+    } else {
+      emit();
+    }
+  }
+
+  /**
+   * 工作时段切换：上班 → 下班自动清空；下班 → 上班兜底 reset / 可选 autostart
+   */
+  function checkWorkBoundary(s = getSettings()) {
+    const inWork = isInWorkHours(s);
+    if (lastInWorkHours === null) {
+      lastInWorkHours = inWork;
+      return;
+    }
+    if (lastInWorkHours && !inWork) {
+      endWorkday();
+    } else if (!lastInWorkHours && inWork) {
+      enterWorkday(s);
+    }
+    lastInWorkHours = inWork;
   }
 
   function applySettings() {
@@ -396,6 +457,7 @@ export function createBreakTimer(onState) {
       state.breakMinutes = s.breakMinutes;
       state.remainingMs = s.focusMinutes * 60_000;
     }
+    checkWorkBoundary(s);
     emit();
   }
 
@@ -406,6 +468,7 @@ export function createBreakTimer(onState) {
     state.maxPostpones = s.maxPostpones;
     state.remainingMs = s.focusMinutes * 60_000;
     state.mode = 'idle';
+    lastInWorkHours = isInWorkHours(s);
     emit();
   }
 
@@ -424,6 +487,7 @@ export function createBreakTimer(onState) {
     pause,
     resume,
     reset,
+    endWorkday,
     applySettings,
   };
 }
