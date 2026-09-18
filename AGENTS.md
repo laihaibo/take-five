@@ -38,6 +38,7 @@ pnpm rebuild            # build && start
 | `electron/db.mjs` | `node:sqlite`（`DatabaseSync`），settings + focus_sessions + break_events |
 | `electron/preload.mjs` | `contextBridge` → `window.takeFive` |
 | `app/` | Next App Router UI（今日 / stats / settings） |
+| `components/` | nav / nav-active / theme-provider / ui（GlassPanel、ProgressRing 等复用件） |
 | `lib/hooks.ts` | 渲染侧只经 `window.takeFive` 调主进程 |
 | `types/index.ts` | TimerState / Settings / TakeFiveApi 单一类型源 |
 | `app/globals.css` | 全部设计 token（浅/深主题 CSS 变量；默认绿色 accent） |
@@ -51,3 +52,4 @@ DB 文件在 Electron `userData` 下的 `take-five.db`（非仓库内）。默�
 - 改设置字段时同步三处：`db.mjs` DEFAULTS + getSettings、`types/index.ts` Settings、设置页 UI。
 - 新休息动作：扩展 `timer.mjs` 的 `ACTIVITY_COPY` 与设置页 `ALL_ACTIVITIES`，id 保持稳定字符串。
 - 产品语言为中文；`window.takeFive` 为唯一桌面 API 面。
+- TS 导入用 `@/*` 别名（`tsconfig.json` paths → 仓库根）。`tsconfig` 的 `exclude` 含 `electron/`：主进程是纯 `.mjs`，不在 `pnpm typecheck` 覆盖范围内，改完需启动实测。
