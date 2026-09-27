@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-const DEFAULTS = {
+export const DEFAULTS = {
   focusMinutes: '50',
   breakMinutes: '5',
   maxPostpones: '3',
@@ -27,6 +27,7 @@ const DEFAULTS = {
 };
 
 let db;
+let settingsCache = null;
 
 export function getDbPath() {
   const userData = app.getPath('userData');
@@ -64,6 +65,12 @@ export function openDb() {
       note TEXT,
       completed_activities TEXT
     );
+    CREATE INDEX IF NOT EXISTS idx_break_events_scheduled_at
+      ON break_events(scheduled_at);
+    CREATE INDEX IF NOT EXISTS idx_break_events_resolved_at
+      ON break_events(resolved_at);
+    CREATE INDEX IF NOT EXISTS idx_focus_sessions_started_at
+      ON focus_sessions(started_at);
   `);
   // migration for older DBs
   try {
@@ -72,43 +79,55 @@ export function openDb() {
     /* already exists */
   }
   seedSettings();
-  // migrate old quiet hours default 12:00 → lunch 11:30 only if still default
-  const row = db
-    .prepare(`SELECT value FROM settings WHERE key = 'quietHoursStart'`)
-    .get();
-  if (row?.value === '12:00') {
-    db.prepare(`UPDATE settings SET value = '11:30' WHERE key = 'quietHoursStart'`).run();
-  }
   return db;
 }
 
+export function closeDb() {
+  settingsCache = null;
+  if (db) {
+    try {
+      db.close();
+    } catch {
+      /* already closed */
+    }
+    db = undefined;
+  }
+}
+
 function seedSettings() {
+  const stmt = db.prepare(
+    `INSERT INTO settings (key, value) VALUES (?, ?)
+     ON CONFLICT(key) DO NOTHING`
+  );
   for (const [key, value] of Object.entries(DEFAULTS)) {
-    db.prepare(
-      `INSERT INTO settings (key, value) VALUES (?, ?)
-       ON CONFLICT(key) DO NOTHING`
-    ).run(key, value);
+    stmt.run(key, value);
   }
 }
 
 export function getSettings() {
+  if (settingsCache) return settingsCache;
   const rows = db.prepare('SELECT key, value FROM settings').all();
   const raw = Object.fromEntries(rows.map((r) => [r.key, r.value]));
   const theme = ['light', 'dark', 'system'].includes(raw.theme)
     ? raw.theme
     : 'system';
-  return {
+  // 缓存并冻结：getSettings 在 250ms tick 热路径上，调用方一律只读
+  settingsCache = Object.freeze({
     focusMinutes: Number(raw.focusMinutes) || 50,
     breakMinutes: Number(raw.breakMinutes) || 5,
     maxPostpones: Number(raw.maxPostpones) || 3,
-    postponeOptions: (raw.postponeOptions || '5,10,15')
-      .split(',')
-      .map((n) => Number(n.trim()))
-      .filter(Boolean),
-    activities: (raw.activities || DEFAULTS.activities)
-      .split(',')
-      .map((s) => s.trim())
-      .filter(Boolean),
+    postponeOptions: Object.freeze(
+      (raw.postponeOptions || '5,10,15')
+        .split(',')
+        .map((n) => Number(n.trim()))
+        .filter(Boolean)
+    ),
+    activities: Object.freeze(
+      (raw.activities || DEFAULTS.activities)
+        .split(',')
+        .map((s) => s.trim())
+        .filter(Boolean)
+    ),
     strictMode: raw.strictMode === 'true',
     soundEnabled: raw.soundEnabled === 'true',
     workStart: raw.workStart || '09:00',
@@ -121,17 +140,29 @@ export function getSettings() {
     autostartFocus: raw.autostartFocus !== 'false',
     alwaysOnTop: raw.alwaysOnTop === 'true',
     theme,
-  };
+  });
+  return settingsCache;
 }
 
 export function setSettings(patch) {
-  const stmt = db.prepare(
-    `INSERT INTO settings (key, value) VALUES (?, ?)
-     ON CONFLICT(key) DO UPDATE SET value = excluded.value`
-  );
-  for (const [key, value] of Object.entries(patch)) {
-    stmt.run(key, String(value));
+  const entries = Object.entries(patch || {});
+  if (entries.length) {
+    const stmt = db.prepare(
+      `INSERT INTO settings (key, value) VALUES (?, ?)
+       ON CONFLICT(key) DO UPDATE SET value = excluded.value`
+    );
+    db.exec('BEGIN');
+    try {
+      for (const [key, value] of entries) {
+        stmt.run(key, String(value));
+      }
+      db.exec('COMMIT');
+    } catch (err) {
+      db.exec('ROLLBACK');
+      throw err;
+    }
   }
+  settingsCache = null;
   return getSettings();
 }
 
@@ -154,6 +185,21 @@ function rangeContains(startHm, endHm, now = new Date()) {
   const mins = minutesNow(now);
   if (start <= end) return mins >= start && mins < end;
   return mins >= start || mins < end;
+}
+
+/** 当前处于 [startHm, endHm) 区间时，返回距区间结束的分钟数；否则 0。支持跨午夜。 */
+export function minutesUntilRangeEnd(startHm, endHm, now = new Date()) {
+  const [sh, sm] = parseHm(startHm);
+  const [eh, em] = parseHm(endHm);
+  const start = sh * 60 + sm;
+  const end = eh * 60 + em;
+  const mins = minutesNow(now);
+  if (start <= end) {
+    return mins >= start && mins < end ? end - mins : 0;
+  }
+  if (mins >= start) return 24 * 60 - mins + end;
+  if (mins < end) return end - mins;
+  return 0;
 }
 
 export function isInQuietHours(settings = getSettings(), now = new Date()) {
@@ -214,36 +260,6 @@ export function insertBreakEvent(event) {
   return Number(result.lastInsertRowid);
 }
 
-export function updateBreakEvent(id, patch) {
-  const fields = [];
-  const values = [];
-  const map = {
-    scheduledAt: 'scheduled_at',
-    promptedAt: 'prompted_at',
-    resolvedAt: 'resolved_at',
-    action: 'action',
-    activity: 'activity',
-    postponeMinutes: 'postpone_minutes',
-    durationSeconds: 'duration_seconds',
-    postponeCount: 'postpone_count',
-    note: 'note',
-    completedActivities: 'completed_activities',
-  };
-  for (const [k, col] of Object.entries(map)) {
-    if (k in patch) {
-      fields.push(`${col} = ?`);
-      values.push(
-        k === 'completedActivities' && patch[k]
-          ? JSON.stringify(patch[k])
-          : (patch[k] ?? null)
-      );
-    }
-  }
-  if (!fields.length) return;
-  values.push(id);
-  db.prepare(`UPDATE break_events SET ${fields.join(', ')} WHERE id = ?`).run(...values);
-}
-
 function parseCompleted(raw) {
   if (!raw) return [];
   try {
@@ -273,46 +289,55 @@ export function listBreakEvents(limit = 100) {
     }));
 }
 
-export function getTodayStats() {
+function localDateKey(d) {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
+const STATS_LOOKBACK_DAYS = 365;
+
+/**
+ * 一次 GROUP BY 查询同时供给今日三格、streak 与周图，
+ * 消除此前逐日 N+1（最多 68 条/次轮询）。日期按本地时区归组。
+ */
+function dailyActionCounts(daysBack) {
   const start = new Date();
   start.setHours(0, 0, 0, 0);
-  const iso = start.toISOString();
-  const row = db
+  start.setDate(start.getDate() - daysBack);
+  const rows = db
     .prepare(
-      `SELECT
-         COUNT(*) as total,
-         SUM(CASE WHEN action = 'completed' THEN 1 ELSE 0 END) as completed,
-         SUM(CASE WHEN action = 'postponed' THEN 1 ELSE 0 END) as postponed,
-         SUM(CASE WHEN action = 'skipped' THEN 1 ELSE 0 END) as skipped,
-         SUM(COALESCE(duration_seconds, 0)) as breakSeconds
+      `SELECT date(COALESCE(resolved_at, scheduled_at), 'localtime') AS day,
+              COUNT(*) AS total,
+              SUM(CASE WHEN action = 'completed' THEN 1 ELSE 0 END) AS completed,
+              SUM(CASE WHEN action = 'postponed' THEN 1 ELSE 0 END) AS postponed,
+              SUM(CASE WHEN action = 'skipped' THEN 1 ELSE 0 END) AS skipped,
+              SUM(COALESCE(duration_seconds, 0)) AS breakSeconds
        FROM break_events
-       WHERE scheduled_at >= ? OR resolved_at >= ?`
+       WHERE COALESCE(resolved_at, scheduled_at) >= ?
+       GROUP BY day`
     )
-    .get(iso, iso);
+    .all(start.toISOString());
+  const map = new Map();
+  for (const r of rows) map.set(r.day, r);
+  return map;
+}
 
-  // streak: consecutive days (ending today or yesterday) with ≥1 completed break
+export function getTodayStats() {
+  const map = dailyActionCounts(STATS_LOOKBACK_DAYS);
+  const row = map.get(localDateKey(new Date()));
+
+  // streak：连续（截至今天或昨天）每天 ≥1 次完成；上限即查询回溯窗口
   let streak = 0;
-  for (let i = 0; i < 60; i++) {
+  for (let i = 0; i <= STATS_LOOKBACK_DAYS; i++) {
     const d = new Date();
     d.setHours(0, 0, 0, 0);
     d.setDate(d.getDate() - i);
-    const next = new Date(d);
-    next.setDate(d.getDate() + 1);
-    const day = db
-      .prepare(
-        `SELECT SUM(CASE WHEN action = 'completed' THEN 1 ELSE 0 END) as c
-         FROM break_events
-         WHERE COALESCE(resolved_at, scheduled_at) >= ?
-           AND COALESCE(resolved_at, scheduled_at) < ?`
-      )
-      .get(d.toISOString(), next.toISOString());
-    const c = Number(day?.c || 0);
-    if (c > 0) streak += 1;
-    else if (i > 0) break;
-    else if (i === 0 && c === 0) {
-      // today not done yet — streak can continue from yesterday
-      continue;
-    }
+    const completed = Number(map.get(localDateKey(d))?.completed || 0);
+    if (completed > 0) streak += 1;
+    else if (i === 0) continue; // 今天还没完成不打断，从昨天继续数
+    else break;
   }
 
   return {
@@ -326,27 +351,16 @@ export function getTodayStats() {
 }
 
 export function getWeekStats() {
+  const map = dailyActionCounts(6);
   const days = [];
   const now = new Date();
   for (let i = 6; i >= 0; i--) {
     const d = new Date(now);
     d.setDate(now.getDate() - i);
     d.setHours(0, 0, 0, 0);
-    const next = new Date(d);
-    next.setDate(d.getDate() + 1);
-    const row = db
-      .prepare(
-        `SELECT
-           SUM(CASE WHEN action = 'completed' THEN 1 ELSE 0 END) as completed,
-           SUM(CASE WHEN action = 'postponed' THEN 1 ELSE 0 END) as postponed,
-           SUM(CASE WHEN action = 'skipped' THEN 1 ELSE 0 END) as skipped
-         FROM break_events
-         WHERE COALESCE(resolved_at, scheduled_at) >= ?
-           AND COALESCE(resolved_at, scheduled_at) < ?`
-      )
-      .get(d.toISOString(), next.toISOString());
+    const row = map.get(localDateKey(d));
     days.push({
-      date: d.toISOString().slice(0, 10),
+      date: localDateKey(d),
       completed: Number(row?.completed || 0),
       postponed: Number(row?.postponed || 0),
       skipped: Number(row?.skipped || 0),

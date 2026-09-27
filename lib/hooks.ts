@@ -12,6 +12,16 @@ export function hasDesktopApi() {
   return Boolean(api());
 }
 
+function isTimerState(v: unknown): v is TimerState {
+  return (
+    typeof v === 'object' &&
+    v !== null &&
+    'mode' in v &&
+    'remainingMs' in v &&
+    'settings' in v
+  );
+}
+
 export function useTimerState() {
   const [state, setState] = useState<TimerState | null>(null);
   const [ready, setReady] = useState(false);
@@ -22,27 +32,43 @@ export function useTimerState() {
       setReady(true);
       return;
     }
-    let unsub = () => {};
-    a.getState().then((s) => {
-      setState(s);
-      setReady(true);
-    });
-    unsub = a.onState((s) => setState(s));
-    return () => unsub();
+    let alive = true;
+    a.getState()
+      .then((s) => {
+        if (!alive) return;
+        setState(s);
+        setReady(true);
+      })
+      .catch(() => {
+        if (alive) setReady(true);
+      });
+    const unsub = a.onState((s) => setState(s));
+    return () => {
+      alive = false;
+      unsub();
+    };
   }, []);
 
   const call = useCallback(
     async (fn: (a: TakeFiveApi) => Promise<unknown>) => {
       const a = api();
       if (!a) return;
-      const next = await fn(a);
-      if (next && typeof next === 'object' && 'mode' in (next as object)) {
-        setState(next as TimerState);
-        return;
-      }
-      // Non-timer results (e.g. alwaysOnTop) — pull fresh snapshot
-      if (next && typeof next === 'object') {
-        setState(await a.getState());
+      try {
+        const next = await fn(a);
+        if (isTimerState(next)) {
+          setState(next);
+        } else if (next && typeof next === 'object') {
+          // 非 TimerState 结果（如 alwaysOnTop）— 拉一份最新快照保持真实
+          setState(await a.getState());
+        }
+      } catch (err) {
+        console.error('[take-five] 调用失败:', err);
+        // 动作失败时回读真实状态，避免 UI 与主进程脱节
+        try {
+          setState(await a.getState());
+        } catch {
+          /* ignore */
+        }
       }
     },
     []
@@ -54,6 +80,7 @@ export function useTimerState() {
 export function useSettings() {
   const [settings, setSettings] = useState<Settings | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   const reload = useCallback(async () => {
     const a = api();
@@ -61,15 +88,22 @@ export function useSettings() {
       setLoading(false);
       return;
     }
-    const s = await a.getSettings();
-    setSettings(s);
-    setLoading(false);
+    try {
+      const s = await a.getSettings();
+      setSettings(s);
+      setError(null);
+    } catch (err) {
+      setError(String(err));
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
   useEffect(() => {
     reload();
   }, [reload]);
 
+  // 写入失败向上抛，由页面展示保存错误
   const update = useCallback(async (patch: Partial<Settings>) => {
     const a = api();
     if (!a) return;
@@ -77,7 +111,7 @@ export function useSettings() {
     setSettings(next);
   }, []);
 
-  return { settings, loading, update, reload };
+  return { settings, loading, error, update, reload };
 }
 
 export function useStats() {
@@ -85,6 +119,7 @@ export function useStats() {
   const [week, setWeek] = useState<WeekDay[]>([]);
   const [events, setEvents] = useState<BreakEvent[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   const reload = useCallback(async () => {
     const a = api();
@@ -92,24 +127,40 @@ export function useStats() {
       setLoading(false);
       return;
     }
-    const [t, w, e] = await Promise.all([
-      a.getTodayStats(),
-      a.getWeekStats(),
-      a.listEvents(50),
-    ]);
-    setToday(t);
-    setWeek(w);
-    setEvents(e);
-    setLoading(false);
+    try {
+      const [t, w, e] = await Promise.all([
+        a.getTodayStats(),
+        a.getWeekStats(),
+        a.listEvents(20),
+      ]);
+      setToday(t);
+      setWeek(w);
+      setEvents(e);
+      setError(null);
+    } catch (err) {
+      setError(String(err));
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
   useEffect(() => {
     reload();
-    const id = setInterval(reload, 15000);
-    return () => clearInterval(id);
+    // 托盘常驻时窗口处于 hidden，暂停轮询；回到前台立即刷新一次
+    const id = setInterval(() => {
+      if (!document.hidden) reload();
+    }, 15000);
+    const onVisible = () => {
+      if (!document.hidden) reload();
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => {
+      clearInterval(id);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
   }, [reload]);
 
-  return { today, week, events, loading, reload };
+  return { today, week, events, loading, error, reload };
 }
 
 export function formatClock(ms: number) {

@@ -1,8 +1,9 @@
 'use client';
 
-import { GlassPanel } from '@/components/ui';
+import { useEffect, useState } from 'react';
+import { GlassPanel, ActivityIcon } from '@/components/ui';
 import { formatDuration, formatTime, hasDesktopApi, useStats } from '@/lib/hooks';
-import { ActivityIcon } from '@/components/ui';
+import { ACTIVITY_LABEL } from '@/lib/activities';
 
 const ACTION_LABEL: Record<string, string> = {
   completed: '完成',
@@ -11,23 +12,16 @@ const ACTION_LABEL: Record<string, string> = {
   pending: '进行中',
 };
 
-const ACT_LABEL: Record<string, string> = {
-  toilet: '上厕所',
-  eyes: '远眺',
-  water: '喝水',
-  stretch: '伸展',
-  walk: '走动',
-  breathe: '深呼吸',
-  neck: '转转脖子',
-  eyes20: '20-20-20',
-  stand: '站起来',
-  face: '洗把脸',
-  shoulder: '肩颈放松',
-  rest: '闭眼片刻',
-};
-
 export default function StatsPage() {
-  const { today, week, events, loading } = useStats();
+  const { today, week, events, loading, error, reload } = useStats();
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => setMounted(true), []);
+
+  // 静态导出预渲染与客户端首帧必须落在同一分支，避免 hydration mismatch
+  if (!mounted) {
+    return <div className="loading page">加载统计…</div>;
+  }
 
   if (!hasDesktopApi()) {
     return (
@@ -42,11 +36,38 @@ export default function StatsPage() {
     );
   }
 
-  if (loading) return <div className="loading">加载统计…</div>;
+  if (error) {
+    return (
+      <div className="page">
+        <div className="page-narrow">
+          <GlassPanel className="section">
+            <h2>统计</h2>
+            <p className="empty">统计加载失败：{error}</p>
+            <div className="btn-row">
+              <button type="button" className="btn btn-ghost" onClick={() => reload()}>
+                重试
+              </button>
+            </div>
+          </GlassPanel>
+        </div>
+      </div>
+    );
+  }
+
+  if (loading) return <div className="loading page">加载统计…</div>;
 
   const max = Math.max(
     1,
     ...week.map((d) => d.completed + d.postponed + d.skipped)
+  );
+
+  const weekTotal = week.reduce(
+    (acc, d) => ({
+      completed: acc.completed + d.completed,
+      postponed: acc.postponed + d.postponed,
+      skipped: acc.skipped + d.skipped,
+    }),
+    { completed: 0, postponed: 0, skipped: 0 }
   );
 
   return (
@@ -79,18 +100,20 @@ export default function StatsPage() {
             </div>
           </div>
           {typeof today?.streak === 'number' && today.streak > 0 && (
-            <p className="empty" style={{ paddingBottom: 0 }}>
-              连续完成休息 {today.streak} 天
-            </p>
+            <p className="empty tight">连续完成休息 {today.streak} 天</p>
           )}
-          <p className="empty" style={{ paddingBottom: 0 }}>
+          <p className="empty tight">
             今日休息累计 {formatDuration(today?.breakSeconds ?? 0)}
           </p>
         </GlassPanel>
 
         <GlassPanel className="section">
           <h2>近 7 天</h2>
-          <div className="week-bars" role="img" aria-label="近七天完成、推迟、跳过对比">
+          <div
+            className="week-bars"
+            role="img"
+            aria-label={`近 7 天共完成休息 ${weekTotal.completed} 次、推迟 ${weekTotal.postponed} 次、跳过 ${weekTotal.skipped} 次`}
+          >
             {week.map((d) => {
               const total = d.completed + d.postponed + d.skipped;
               const h = (v: number) => (v / max) * 100;
@@ -109,7 +132,7 @@ export default function StatsPage() {
                     {d.completed > 0 && (
                       <div className="seg c" style={{ height: `${h(d.completed)}%` }} />
                     )}
-                    {total === 0 && <div className="seg s" style={{ height: '4px', opacity: 0.3 }} />}
+                    {total === 0 && <div className="seg s seg-empty" />}
                   </div>
                   <div className="day">{day}</div>
                 </div>
@@ -124,23 +147,25 @@ export default function StatsPage() {
             <p className="empty">还没有记录。开始第一轮专注后，这里会诚实记下每一次选择。</p>
           ) : (
             <div className="event-list">
-              {events.slice(0, 20).map((e) => (
+              {events.map((e) => (
                 <div className="event" key={e.id}>
                   <div className="left">
                     <div className="title">
                       {e.completedActivities?.length ? (
-                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                        <span className="acts">
                           {e.completedActivities.map((id) => (
-                            <span key={id} style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                            <span className="act" key={id}>
                               <ActivityIcon id={id} size={14} />
-                              {ACT_LABEL[id] || id}
+                              {ACTIVITY_LABEL[id] || id}
                             </span>
                           ))}
                         </span>
                       ) : e.activity ? (
-                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                          <ActivityIcon id={e.activity} size={14} />
-                          {ACT_LABEL[e.activity] || e.activity}
+                        <span className="acts">
+                          <span className="act">
+                            <ActivityIcon id={e.activity} size={14} />
+                            {ACTIVITY_LABEL[e.activity] || e.activity}
+                          </span>
                         </span>
                       ) : (
                         '休息'

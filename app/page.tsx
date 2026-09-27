@@ -1,6 +1,6 @@
 'use client';
 
-import { Suspense, useEffect, useState } from 'react';
+import { memo, Suspense, useCallback, useEffect, useMemo, useRef } from 'react';
 import { useSearchParams } from 'next/navigation';
 import {
   GlassPanel,
@@ -19,7 +19,9 @@ import {
   modeLabel,
   useTimerState,
 } from '@/lib/hooks';
-import type { TimerState } from '@/types';
+import type { ActivityCopy, TakeFiveApi, TimerState } from '@/types';
+
+type CallFn = (fn: (a: TakeFiveApi) => Promise<unknown>) => Promise<void>;
 
 function ThemeCycleButton() {
   const { theme, setTheme } = useTheme();
@@ -44,22 +46,29 @@ function ThemeCycleButton() {
   );
 }
 
-function ActivityChips({
-  state,
+// 250ms 状态推送会让整棵树重渲染；chips 用稳定 props + memo，
+// 只有勾选集/推荐位真正变化时才重画
+const ActivityChips = memo(function ActivityChips({
+  activities,
+  suggestedId,
+  checkedKey,
+  selectable = false,
   onToggle,
-  selectable,
 }: {
-  state: TimerState;
-  onToggle?: (id: string) => void;
+  activities: ActivityCopy[];
+  suggestedId: string;
+  checkedKey: string;
   selectable?: boolean;
+  onToggle?: (id: string) => void;
 }) {
-  const checked = new Set(state.checkedActivities || []);
+  const checked = useMemo(
+    () => new Set(checkedKey ? checkedKey.split(',') : []),
+    [checkedKey]
+  );
   return (
     <div className="chips" aria-label="休息动作">
-      {state.suggestedActivities.map((a) => {
-        const on = selectable
-          ? checked.has(a.id)
-          : a.id === state.suggestedActivity.id;
+      {activities.map((a) => {
+        const on = selectable ? checked.has(a.id) : a.id === suggestedId;
         return (
           <button
             key={a.id}
@@ -80,12 +89,42 @@ function ActivityChips({
       })}
     </div>
   );
-}
+});
 
-function BreakOverlay({ state }: { state: TimerState }) {
-  const { call } = useTimerState();
+function BreakOverlay({ state, call }: { state: TimerState; call: CallFn }) {
   const s = state.settings;
   const overLimit = state.postponeCount >= s.maxPostpones;
+  const panelRef = useRef<HTMLDivElement>(null);
+
+  // 打开时聚焦主按钮，Tab 焦点锁在对话框内
+  useEffect(() => {
+    const panel = panelRef.current;
+    if (!panel) return;
+    panel.querySelector<HTMLButtonElement>('.btn-break')?.focus();
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Tab') return;
+      const focusables = panel.querySelectorAll<HTMLElement>(
+        'button:not([disabled])'
+      );
+      if (!focusables.length) return;
+      const first = focusables[0];
+      const last = focusables[focusables.length - 1];
+      if (e.shiftKey && document.activeElement === first) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault();
+        first.focus();
+      }
+    };
+    panel.addEventListener('keydown', onKey);
+    return () => panel.removeEventListener('keydown', onKey);
+  }, []);
+
+  const onToggle = useCallback(
+    (id: string) => call((a) => a.toggleActivity(id)),
+    [call]
+  );
 
   return (
     <div
@@ -95,72 +134,74 @@ function BreakOverlay({ state }: { state: TimerState }) {
       aria-labelledby="break-title"
     >
       <GlassPanel className="break-card" breakMode strong>
-        <div className="mode-pill break">
-          <span className="dot" />
-          休息提示
-        </div>
-        <h1 id="break-title">休息一下</h1>
-        <p className="hint">
-          已专注 {state.plannedMinutes} 分钟。勾选你完成的动作，再点「完成休息」。
-          <br />
-          建议：<strong>{state.suggestedActivity.label}</strong> ——{' '}
-          {state.suggestedActivity.hint}
-        </p>
+        <div ref={panelRef} className="break-card-inner">
+          <div className="mode-pill break">
+            <span className="dot" />
+            休息提示
+          </div>
+          <h1 id="break-title">休息一下</h1>
+          <p className="hint">
+            已专注 {state.plannedMinutes} 分钟。勾选你完成的动作，再点「完成休息」。
+            <br />
+            建议：<strong>{state.suggestedActivity.label}</strong> ——{' '}
+            {state.suggestedActivity.hint}
+          </p>
 
-        <ActivityChips
-          state={state}
-          selectable
-          onToggle={(id) => call((a) => a.toggleActivity(id))}
-        />
+          <ActivityChips
+            activities={state.suggestedActivities}
+            suggestedId={state.suggestedActivity.id}
+            checkedKey={state.checkedActivities.join(',')}
+            selectable
+            onToggle={onToggle}
+          />
 
-        <div className="btn-row">
-          <button
-            type="button"
-            className="btn btn-break"
-            onClick={() =>
-              call((a) => a.completeBreak(state.checkedActivities))
-            }
-          >
-            完成休息 · {s.breakMinutes} 分钟
-          </button>
+          <div className="btn-row">
+            <button
+              type="button"
+              className="btn btn-break"
+              onClick={() => call((a) => a.completeBreak(state.checkedActivities))}
+            >
+              完成休息 · {s.breakMinutes} 分钟
+            </button>
+            <button
+              type="button"
+              className="btn btn-ghost"
+              onClick={() => call((a) => a.startBreak())}
+            >
+              先倒计时
+            </button>
+          </div>
+
+          <div className="postpone-row">
+            {s.postponeOptions.map((m) => (
+              <button
+                key={m}
+                type="button"
+                className="btn btn-ghost"
+                disabled={s.strictMode || overLimit}
+                onClick={() => call((a) => a.postpone(m))}
+              >
+                推迟 {m} 分
+              </button>
+            ))}
+          </div>
+
           <button
             type="button"
             className="btn btn-ghost"
-            onClick={() => call((a) => a.startBreak())}
+            onClick={() => call((a) => a.skip())}
           >
-            先倒计时
+            跳过这次
           </button>
+
+          <p className={`postpone-note ${overLimit ? 'warn' : ''}`}>
+            {s.strictMode
+              ? '严格模式已开启，暂不可推迟'
+              : overLimit
+                ? `已推迟 ${state.postponeCount} 次，尽量起来动一下`
+                : `已推迟 ${state.postponeCount} / ${s.maxPostpones} 次`}
+          </p>
         </div>
-
-        <div className="postpone-row">
-          {s.postponeOptions.map((m) => (
-            <button
-              key={m}
-              type="button"
-              className="btn btn-ghost"
-              disabled={s.strictMode}
-              onClick={() => call((a) => a.postpone(m))}
-            >
-              推迟 {m} 分
-            </button>
-          ))}
-        </div>
-
-        <button
-          type="button"
-          className="btn btn-ghost"
-          onClick={() => call((a) => a.skip())}
-        >
-          跳过这次
-        </button>
-
-        <p className={`postpone-note ${overLimit ? 'warn' : ''}`}>
-          {s.strictMode
-            ? '严格模式已开启，暂不可推迟'
-            : overLimit
-              ? `已推迟 ${state.postponeCount} 次，尽量起来动一下`
-              : `已推迟 ${state.postponeCount} / ${s.maxPostpones} 次`}
-        </p>
       </GlassPanel>
     </div>
   );
@@ -170,6 +211,10 @@ function HomeApp() {
   const { state, ready, call } = useTimerState();
   const search = useSearchParams();
   const isBreakView = search.get('view') === 'break';
+  const onToggle = useCallback(
+    (id: string) => call((a) => a.toggleActivity(id)),
+    [call]
+  );
 
   useEffect(() => {
     document.title = isBreakView ? '休息一下' : 'Take Five';
@@ -195,7 +240,7 @@ function HomeApp() {
   }
 
   if (isBreakView || state.mode === 'break-prompt') {
-    return <BreakOverlay state={state} />;
+    return <BreakOverlay state={state} call={call} />;
   }
 
   const isBreak = state.mode === 'break';
@@ -233,13 +278,13 @@ function HomeApp() {
       </header>
 
       {state.quiet && (
-        <div className="quiet-banner" role="status">
+        <div className="banner quiet-banner" role="status">
           午休 / 安静时段（{s.quietHoursStart}–{s.quietHoursEnd}）
           ，提醒会自动顺延
         </div>
       )}
       {!state.quiet && s.workEnabled && !state.inWorkHours && (
-        <div className="work-banner" role="status">
+        <div className="banner work-banner" role="status">
           当前不在工作时间（{s.workStart}–{s.workEnd}
           {s.weekdaysOnly ? '，仅工作日' : ''}）· 到点自动清空，上班后点「开始专注」即可
         </div>
@@ -257,10 +302,10 @@ function HomeApp() {
             {state.cycle > 0 ? ` · 第 ${state.cycle + 1} 轮` : ''}
           </div>
 
-          <div style={{ position: 'relative', width: 220, height: 220 }}>
+          <div className="ring-wrap">
             <ProgressRing progress={state.progress} mode={state.mode} />
             <div className="ring-inner">
-              <div className="time-display" aria-live="polite">
+              <div className="time-display" role="timer">
                 {formatClock(state.remainingMs)}
               </div>
               <div className="time-label">
@@ -305,9 +350,7 @@ function HomeApp() {
               <button
                 type="button"
                 className="btn btn-break"
-                onClick={() =>
-                  call((a) => a.completeBreak(state.checkedActivities))
-                }
+                onClick={() => call((a) => a.completeBreak(state.checkedActivities))}
               >
                 休息结束
               </button>
@@ -327,9 +370,11 @@ function HomeApp() {
         <GlassPanel className="section">
           <h2>{isBreak ? '本次休息动作（可勾选）' : '可用休息动作'}</h2>
           <ActivityChips
-            state={state}
-            selectable={isBreak || isBreakView}
-            onToggle={(id) => call((a) => a.toggleActivity(id))}
+            activities={state.suggestedActivities}
+            suggestedId={state.suggestedActivity.id}
+            checkedKey={state.checkedActivities.join(',')}
+            selectable={isBreak}
+            onToggle={onToggle}
           />
           <p className="empty" style={{ paddingTop: 12 }}>
             {state.suggestedActivity.hint}

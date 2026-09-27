@@ -1,84 +1,82 @@
 'use client';
 
-import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import type { ThemeMode } from '@/types';
 
 const ThemeCtx = createContext<{
   theme: ThemeMode;
   resolved: 'light' | 'dark';
-  setTheme: (t: ThemeMode) => Promise<void>;
+  setTheme: (t: ThemeMode) => void;
 }>({
   theme: 'system',
   resolved: 'dark',
-  setTheme: async () => {},
+  setTheme: () => {},
 });
 
 export function useTheme() {
   return useContext(ThemeCtx);
 }
 
-function resolveTheme(theme: ThemeMode, systemDark: boolean): 'light' | 'dark' {
-  if (theme === 'system') return systemDark ? 'dark' : 'light';
-  return theme;
+const THEME_KEY = 'tf-theme';
+
+function systemDark() {
+  return window.matchMedia('(prefers-color-scheme: dark)').matches;
 }
 
-function applyDom(theme: ThemeMode, systemDark: boolean) {
-  const resolved = resolveTheme(theme, systemDark);
+/** 唯一的 DOM 应用点；同时写 localStorage 镜像供 pre-paint 脚本防首帧闪变 */
+function applyDom(theme: ThemeMode) {
+  const resolved = theme === 'system' ? (systemDark() ? 'dark' : 'light') : theme;
   document.documentElement.dataset.theme = resolved;
   document.documentElement.style.colorScheme = resolved;
+  try {
+    localStorage.setItem(THEME_KEY, resolved);
+  } catch {
+    /* ignore */
+  }
   return resolved;
 }
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const [theme, setThemeState] = useState<ThemeMode>('system');
   const [resolved, setResolved] = useState<'light' | 'dark'>('dark');
-  const [ready, setReady] = useState(false);
+  const themeRef = useRef<ThemeMode>('system');
 
-  useEffect(() => {
-    let alive = true;
-    const mq = window.matchMedia('(prefers-color-scheme: dark)');
-
-    const sync = async (t: ThemeMode) => {
-      if (!alive) return;
-      setThemeState(t);
-      setResolved(applyDom(t, mq.matches));
-      setReady(true);
-    };
-
-    window.takeFive
-      ?.getSettings()
-      .then((s) => sync((s.theme as ThemeMode) || 'system'))
-      .catch(() => sync('system'));
-
-    const onSys = () => {
-      setThemeState((t) => {
-        setResolved(applyDom(t, mq.matches));
-        return t;
-      });
-    };
-    mq.addEventListener('change', onSys);
-    return () => {
-      alive = false;
-      mq.removeEventListener('change', onSys);
-    };
-  }, []);
-
-  useEffect(() => {
-    if (!ready) return;
-    const mq = window.matchMedia('(prefers-color-scheme: dark)');
-    setResolved(applyDom(theme, mq.matches));
-  }, [theme, ready]);
-
-  const setTheme = useCallback(async (t: ThemeMode) => {
+  const change = useCallback((t: ThemeMode, persist: boolean) => {
+    themeRef.current = t;
     setThemeState(t);
-    const mq = window.matchMedia('(prefers-color-scheme: dark)');
-    setResolved(applyDom(t, mq.matches));
-    try {
-      await window.takeFive?.setSettings({ theme: t });
-    } catch {
-      /* ignore */
+    setResolved(applyDom(t));
+    if (persist) {
+      window.takeFive?.setSettings({ theme: t }).catch(() => {});
     }
   }, []);
+
+  useEffect(() => {
+    const mq = window.matchMedia('(prefers-color-scheme: dark)');
+    const onSystemChange = () => {
+      if (themeRef.current === 'system') {
+        setResolved(applyDom('system'));
+      }
+    };
+    mq.addEventListener('change', onSystemChange);
+
+    // 设置库是主题的真源；首帧外观已由 layout 的 pre-paint 脚本兜住
+    window.takeFive
+      ?.getSettings()
+      .then((s) => change((s.theme as ThemeMode) || 'system', false))
+      .catch(() => change('system', false));
+
+    return () => mq.removeEventListener('change', onSystemChange);
+  }, [change]);
+
+  const setTheme = useCallback((t: ThemeMode) => change(t, true), [change]);
 
   const value = useMemo(
     () => ({ theme, resolved, setTheme }),

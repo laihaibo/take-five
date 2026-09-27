@@ -1,0 +1,842 @@
+{
+  "schema_version": "mimosa-task-review/v2",
+  "run_id": "20260927T154858025Z-20820-8a9775da19d6",
+  "run_status": "inconclusive",
+  "errors": [
+    {
+      "stage": "scan",
+      "target": "types/index.ts",
+      "reason": "scanner_failed: spawnSync C:\\nvm4w\\nodejs\\node.exe ETIMEDOUT"
+    },
+    {
+      "stage": "scan",
+      "target": "lib/activities.ts",
+      "reason": "scanner_failed: spawnSync C:\\nvm4w\\nodejs\\node.exe ETIMEDOUT"
+    },
+    {
+      "stage": "scan",
+      "target": "lib/hooks.ts",
+      "reason": "scanner_failed: spawnSync C:\\nvm4w\\nodejs\\node.exe ETIMEDOUT"
+    },
+    {
+      "stage": "scan",
+      "target": "components/ui.tsx",
+      "reason": "scanner_failed: spawnSync C:\\nvm4w\\nodejs\\node.exe ETIMEDOUT"
+    },
+    {
+      "stage": "scan",
+      "target": "components/theme-provider.tsx",
+      "reason": "scanner_failed: spawnSync C:\\nvm4w\\nodejs\\node.exe ETIMEDOUT"
+    },
+    {
+      "stage": "scan",
+      "target": "components/nav.tsx",
+      "reason": "scanner_failed: spawnSync C:\\nvm4w\\nodejs\\node.exe ETIMEDOUT"
+    },
+    {
+      "stage": "scan",
+      "target": "app/layout.tsx",
+      "reason": "scanner_failed: spawnSync C:\\nvm4w\\nodejs\\node.exe ETIMEDOUT"
+    },
+    {
+      "stage": "scan",
+      "target": "app/settings/page.tsx",
+      "reason": "scanner_failed: spawnSync C:\\nvm4w\\nodejs\\node.exe ETIMEDOUT"
+    },
+    {
+      "stage": "scan",
+      "target": "app/stats/page.tsx",
+      "reason": "scanner_failed: spawnSync C:\\nvm4w\\nodejs\\node.exe ETIMEDOUT"
+    },
+    {
+      "stage": "scan",
+      "target": "app/page.tsx",
+      "reason": "scanner_failed: spawnSync C:\\nvm4w\\nodejs\\node.exe ETIMEDOUT"
+    },
+    {
+      "stage": "agent-check",
+      "target": ".",
+      "reason": "stop_budget_exhausted: focused agent configuration check was not run before the gate budget"
+    }
+  ],
+  "coverage": {
+    "schema_version": "mimosa-hook-coverage/v1",
+    "status": "partial",
+    "scope": "hook_observed_diff",
+    "baseline": {
+      "complete": true,
+      "captured_files": 16,
+      "candidate_limit": 5000,
+      "truncated": false,
+      "enumeration_error_count": 0,
+      "snapshot_error_count": 0,
+      "compensated_target_count": 11
+    },
+    "change_tracking": {
+      "touched_observed": 11,
+      "touched_retained": 11,
+      "truncated": false,
+      "bash_mutation": true,
+      "bash_discovered": 11,
+      "bash_discovery_limit": 80,
+      "bash_discovery_truncated": false
+    },
+    "candidates": {
+      "eligible_files": 11,
+      "selected_files": 11,
+      "limit": 20,
+      "truncated": false
+    },
+    "scanning": {
+      "required_files": 10,
+      "scanned_files": 0,
+      "skipped_files": 0,
+      "failed_files": 10,
+      "project_checks_required": 1,
+      "project_checks_completed": 0
+    },
+    "notification": {
+      "eligible_findings": 0,
+      "detailed_findings": 0,
+      "detail_limit": 3,
+      "truncated": false
+    },
+    "reason_counts": {
+      "scanner_failed": 10,
+      "stop_budget_exhausted": 1,
+      "project_check_failed": 11
+    },
+    "reasons": [
+      {
+        "code": "scanner_failed",
+        "stage": "scan",
+        "target": "types/index.ts",
+        "detail": "spawnSync C:\\nvm4w\\nodejs\\node.exe ETIMEDOUT",
+        "affects_completion": true
+      },
+      {
+        "code": "scanner_failed",
+        "stage": "scan",
+        "target": "lib/activities.ts",
+        "detail": "spawnSync C:\\nvm4w\\nodejs\\node.exe ETIMEDOUT",
+        "affects_completion": true
+      },
+      {
+        "code": "scanner_failed",
+        "stage": "scan",
+        "target": "lib/hooks.ts",
+        "detail": "spawnSync C:\\nvm4w\\nodejs\\node.exe ETIMEDOUT",
+        "affects_completion": true
+      },
+      {
+        "code": "scanner_failed",
+        "stage": "scan",
+        "target": "components/ui.tsx",
+        "detail": "spawnSync C:\\nvm4w\\nodejs\\node.exe ETIMEDOUT",
+        "affects_completion": true
+      },
+      {
+        "code": "scanner_failed",
+        "stage": "scan",
+        "target": "components/theme-provider.tsx",
+        "detail": "spawnSync C:\\nvm4w\\nodejs\\node.exe ETIMEDOUT",
+        "affects_completion": true
+      },
+      {
+        "code": "scanner_failed",
+        "stage": "scan",
+        "target": "components/nav.tsx",
+        "detail": "spawnSync C:\\nvm4w\\nodejs\\node.exe ETIMEDOUT",
+        "affects_completion": true
+      },
+      {
+        "code": "scanner_failed",
+        "stage": "scan",
+        "target": "app/layout.tsx",
+        "detail": "spawnSync C:\\nvm4w\\nodejs\\node.exe ETIMEDOUT",
+        "affects_completion": true
+      },
+      {
+        "code": "scanner_failed",
+        "stage": "scan",
+        "target": "app/settings/page.tsx",
+        "detail": "spawnSync C:\\nvm4w\\nodejs\\node.exe ETIMEDOUT",
+        "affects_completion": true
+      },
+      {
+        "code": "scanner_failed",
+        "stage": "scan",
+        "target": "app/stats/page.tsx",
+        "detail": "spawnSync C:\\nvm4w\\nodejs\\node.exe ETIMEDOUT",
+        "affects_completion": true
+      },
+      {
+        "code": "scanner_failed",
+        "stage": "scan",
+        "target": "app/page.tsx",
+        "detail": "spawnSync C:\\nvm4w\\nodejs\\node.exe ETIMEDOUT",
+        "affects_completion": true
+      },
+      {
+        "code": "stop_budget_exhausted",
+        "stage": "agent-check",
+        "target": ".",
+        "detail": "focused agent configuration check was not run before the gate budget",
+        "affects_completion": true
+      },
+      {
+        "code": "project_check_failed",
+        "stage": "scan",
+        "target": "types/index.ts",
+        "detail": "scanner_failed: spawnSync C:\\nvm4w\\nodejs\\node.exe ETIMEDOUT",
+        "affects_completion": true
+      },
+      {
+        "code": "project_check_failed",
+        "stage": "scan",
+        "target": "lib/activities.ts",
+        "detail": "scanner_failed: spawnSync C:\\nvm4w\\nodejs\\node.exe ETIMEDOUT",
+        "affects_completion": true
+      },
+      {
+        "code": "project_check_failed",
+        "stage": "scan",
+        "target": "lib/hooks.ts",
+        "detail": "scanner_failed: spawnSync C:\\nvm4w\\nodejs\\node.exe ETIMEDOUT",
+        "affects_completion": true
+      },
+      {
+        "code": "project_check_failed",
+        "stage": "scan",
+        "target": "components/ui.tsx",
+        "detail": "scanner_failed: spawnSync C:\\nvm4w\\nodejs\\node.exe ETIMEDOUT",
+        "affects_completion": true
+      },
+      {
+        "code": "project_check_failed",
+        "stage": "scan",
+        "target": "components/theme-provider.tsx",
+        "detail": "scanner_failed: spawnSync C:\\nvm4w\\nodejs\\node.exe ETIMEDOUT",
+        "affects_completion": true
+      },
+      {
+        "code": "project_check_failed",
+        "stage": "scan",
+        "target": "components/nav.tsx",
+        "detail": "scanner_failed: spawnSync C:\\nvm4w\\nodejs\\node.exe ETIMEDOUT",
+        "affects_completion": true
+      },
+      {
+        "code": "project_check_failed",
+        "stage": "scan",
+        "target": "app/layout.tsx",
+        "detail": "scanner_failed: spawnSync C:\\nvm4w\\nodejs\\node.exe ETIMEDOUT",
+        "affects_completion": true
+      },
+      {
+        "code": "project_check_failed",
+        "stage": "scan",
+        "target": "app/settings/page.tsx",
+        "detail": "scanner_failed: spawnSync C:\\nvm4w\\nodejs\\node.exe ETIMEDOUT",
+        "affects_completion": true
+      },
+      {
+        "code": "project_check_failed",
+        "stage": "scan",
+        "target": "app/stats/page.tsx",
+        "detail": "scanner_failed: spawnSync C:\\nvm4w\\nodejs\\node.exe ETIMEDOUT",
+        "affects_completion": true
+      },
+      {
+        "code": "project_check_failed",
+        "stage": "scan",
+        "target": "app/page.tsx",
+        "detail": "scanner_failed: spawnSync C:\\nvm4w\\nodejs\\node.exe ETIMEDOUT",
+        "affects_completion": true
+      },
+      {
+        "code": "project_check_failed",
+        "stage": "agent-check",
+        "target": ".",
+        "detail": "stop_budget_exhausted: focused agent configuration check was not run before the gate budget",
+        "affects_completion": true
+      }
+    ],
+    "reasons_truncated": false
+  },
+  "generated_at": "2026-09-27T15:48:58.025Z",
+  "session_id": "sess_07d159ef-c541-4a24-ad79-7ada92707e4e",
+  "target": ".",
+  "revision": "2d311666cfee70f5288caa9ee099484411bf0e5c",
+  "rules_version": "unavailable",
+  "diff_hash": "3a9c96296059e9b155a985b176b767918a87938a3293339c6b2d08d21aa253bf",
+  "diff": {
+    "algorithm": "sha256",
+    "changed_file_count": 11,
+    "changed_files": [
+      {
+        "file": "AGENTS.md",
+        "ranges": [
+          {
+            "start": 29,
+            "end": 29
+          },
+          {
+            "start": 41,
+            "end": 41
+          },
+          {
+            "start": 43,
+            "end": 43
+          },
+          {
+            "start": 54,
+            "end": 54
+          }
+        ],
+        "before_hash": "c3f1eee7b84fd26af67d1bed8c1d5fe650c40fe4978388c452120c1fcce2435e",
+        "after_hash": "11a09037af3dcf00f4eaac6620c769df4734daa11fba89d5a237f298abfc6bf8"
+      },
+      {
+        "file": "app/layout.tsx",
+        "ranges": [
+          {
+            "start": 2,
+            "end": 2
+          },
+          {
+            "start": 12,
+            "end": 14
+          },
+          {
+            "start": 19,
+            "end": 19
+          },
+          {
+            "start": 24,
+            "end": 26
+          }
+        ],
+        "before_hash": "2b778401900956f52aa8a1b5b2cbe5395406dc0b36fe59478ffd1669154fee79",
+        "after_hash": "fcfeb60ec73803c5c4111cc370e529af5136b9c9763a2d21f1554f33d415ed19"
+      },
+      {
+        "file": "app/page.tsx",
+        "ranges": [
+          {
+            "start": 3,
+            "end": 3
+          },
+          {
+            "start": 22,
+            "end": 24
+          },
+          {
+            "start": 49,
+            "end": 55
+          },
+          {
+            "start": 58,
+            "end": 60
+          },
+          {
+            "start": 62,
+            "end": 62
+          },
+          {
+            "start": 64,
+            "end": 67
+          },
+          {
+            "start": 70,
+            "end": 71
+          },
+          {
+            "start": 92,
+            "end": 92
+          },
+          {
+            "start": 94,
+            "end": 94
+          },
+          {
+            "start": 97,
+            "end": 127
+          },
+          {
+            "start": 137,
+            "end": 148
+          },
+          {
+            "start": 150,
+            "end": 156
+          },
+          {
+            "start": 158,
+            "end": 165
+          },
+          {
+            "start": 169,
+            "end": 169
+          },
+          {
+            "start": 171,
+            "end": 171
+          },
+          {
+            "start": 173,
+            "end": 187
+          },
+          {
+            "start": 189,
+            "end": 195
+          },
+          {
+            "start": 197,
+            "end": 204
+          },
+          {
+            "start": 214,
+            "end": 217
+          },
+          {
+            "start": 243,
+            "end": 243
+          },
+          {
+            "start": 281,
+            "end": 281
+          },
+          {
+            "start": 287,
+            "end": 287
+          },
+          {
+            "start": 305,
+            "end": 305
+          },
+          {
+            "start": 308,
+            "end": 308
+          },
+          {
+            "start": 353,
+            "end": 353
+          },
+          {
+            "start": 373,
+            "end": 377
+          }
+        ],
+        "before_hash": "1ce937f8e9e6de9c328d9d5ea2d8ff55260e91c103d715f1b3a8900404587cc5",
+        "after_hash": "a03e25fe86e9adc00b339dc1fb90becdd07c97adf7aece681ff9986bf24b59ab"
+      },
+      {
+        "file": "app/settings/page.tsx",
+        "ranges": [
+          {
+            "start": 3,
+            "end": 3
+          },
+          {
+            "start": 7,
+            "end": 8
+          },
+          {
+            "start": 16,
+            "end": 23
+          },
+          {
+            "start": 25,
+            "end": 25
+          },
+          {
+            "start": 27,
+            "end": 36
+          },
+          {
+            "start": 51,
+            "end": 163
+          },
+          {
+            "start": 170,
+            "end": 171
+          },
+          {
+            "start": 174,
+            "end": 174
+          },
+          {
+            "start": 188,
+            "end": 193
+          },
+          {
+            "start": 208,
+            "end": 208
+          },
+          {
+            "start": 227,
+            "end": 227
+          },
+          {
+            "start": 239,
+            "end": 239
+          },
+          {
+            "start": 246,
+            "end": 246
+          },
+          {
+            "start": 255,
+            "end": 255
+          },
+          {
+            "start": 272,
+            "end": 272
+          },
+          {
+            "start": 282,
+            "end": 285
+          },
+          {
+            "start": 294,
+            "end": 294
+          },
+          {
+            "start": 296,
+            "end": 296
+          },
+          {
+            "start": 298,
+            "end": 298
+          },
+          {
+            "start": 307,
+            "end": 307
+          },
+          {
+            "start": 331,
+            "end": 331
+          },
+          {
+            "start": 343,
+            "end": 343
+          },
+          {
+            "start": 355,
+            "end": 355
+          },
+          {
+            "start": 367,
+            "end": 367
+          }
+        ],
+        "before_hash": "9cf0725efda3212bc0ceb0fc5a8cbcaad4d6481d381b9ec59d47cc570ad47148",
+        "after_hash": "b5220b87609916048dd63b2ff069dcad0975ecdb890c266bebb894d315ec4533"
+      },
+      {
+        "file": "app/stats/page.tsx",
+        "ranges": [
+          {
+            "start": 3,
+            "end": 4
+          },
+          {
+            "start": 6,
+            "end": 6
+          },
+          {
+            "start": 16,
+            "end": 24
+          },
+          {
+            "start": 39,
+            "end": 57
+          },
+          {
+            "start": 64,
+            "end": 72
+          },
+          {
+            "start": 103,
+            "end": 103
+          },
+          {
+            "start": 105,
+            "end": 105
+          },
+          {
+            "start": 112,
+            "end": 116
+          },
+          {
+            "start": 135,
+            "end": 135
+          },
+          {
+            "start": 150,
+            "end": 150
+          },
+          {
+            "start": 155,
+            "end": 155
+          },
+          {
+            "start": 157,
+            "end": 157
+          },
+          {
+            "start": 159,
+            "end": 159
+          },
+          {
+            "start": 164,
+            "end": 168
+          }
+        ],
+        "before_hash": "c591b3ace41cef4b47f693ba0008052351e19ee088f16c3d5799afd904f25cd1",
+        "after_hash": "783369af49822191f4670b3935750f09d0ed2e5d203ed19d5a3d4be26659fdbf"
+      },
+      {
+        "file": "components/nav.tsx",
+        "ranges": [
+          {
+            "start": 1,
+            "end": 2
+          },
+          {
+            "start": 4,
+            "end": 10
+          },
+          {
+            "start": 13,
+            "end": 23
+          },
+          {
+            "start": 25,
+            "end": 31
+          }
+        ],
+        "before_hash": "bb9e5950ce842731df3d52465093d87d3cea16d09e003016b75431e6d1dfe8e9",
+        "after_hash": "7b340347a9a8919f9beebfcfff506e2bf8f607b35b41088ab27684ff7559e990"
+      },
+      {
+        "file": "components/theme-provider.tsx",
+        "ranges": [
+          {
+            "start": 3,
+            "end": 11
+          },
+          {
+            "start": 17,
+            "end": 17
+          },
+          {
+            "start": 21,
+            "end": 21
+          },
+          {
+            "start": 28,
+            "end": 31
+          },
+          {
+            "start": 34,
+            "end": 36
+          },
+          {
+            "start": 39,
+            "end": 43
+          },
+          {
+            "start": 50,
+            "end": 59
+          },
+          {
+            "start": 63,
+            "end": 66
+          },
+          {
+            "start": 68,
+            "end": 68
+          },
+          {
+            "start": 70,
+            "end": 70
+          },
+          {
+            "start": 73,
+            "end": 74
+          },
+          {
+            "start": 76,
+            "end": 77
+          },
+          {
+            "start": 79,
+            "end": 79
+          }
+        ],
+        "before_hash": "7aa8233f823230685b66fc7ca88760d074c0a0d47bcc3091756014a4ef5a5938",
+        "after_hash": "aa081ed8dfbbe8e7e7c894112b821551c6ac3cc5c5f4e332d567918cacaa68d1"
+      },
+      {
+        "file": "components/ui.tsx",
+        "ranges": [
+          {
+            "start": 2,
+            "end": 2
+          },
+          {
+            "start": 26,
+            "end": 26
+          },
+          {
+            "start": 34,
+            "end": 34
+          },
+          {
+            "start": 40,
+            "end": 40
+          },
+          {
+            "start": 43,
+            "end": 53
+          },
+          {
+            "start": 170,
+            "end": 186
+          },
+          {
+            "start": 194,
+            "end": 271
+          }
+        ],
+        "before_hash": "6f035508fcb0f83eacf3dfda2135689478cf476e13b8123a075810cc19ecaebd",
+        "after_hash": "3876b8f06b1e392ff6d0f1388171f06d78d70a609b3383ceabbefa83d1ca30b9"
+      },
+      {
+        "file": "lib/activities.ts",
+        "ranges": [
+          {
+            "start": 1,
+            "end": 24
+          }
+        ],
+        "before_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "after_hash": "8c8fa4fd0b2b341e414704de14b9128f3e41a19cb39611bebe1ddbf6e0e8156f"
+      },
+      {
+        "file": "lib/hooks.ts",
+        "ranges": [
+          {
+            "start": 15,
+            "end": 24
+          },
+          {
+            "start": 35,
+            "end": 49
+          },
+          {
+            "start": 56,
+            "end": 71
+          },
+          {
+            "start": 83,
+            "end": 83
+          },
+          {
+            "start": 91,
+            "end": 99
+          },
+          {
+            "start": 106,
+            "end": 106
+          },
+          {
+            "start": 114,
+            "end": 114
+          },
+          {
+            "start": 122,
+            "end": 122
+          },
+          {
+            "start": 130,
+            "end": 144
+          },
+          {
+            "start": 149,
+            "end": 160
+          },
+          {
+            "start": 163,
+            "end": 163
+          }
+        ],
+        "before_hash": "8f8eddc348518cc5d1d44faccbb30825740ea6d9994ad5d26a9ad233e06c0e89",
+        "after_hash": "bf9b4b1cc01f1d6c9e5dd88091d13b1e883fd107824d540543b2965771722a5b"
+      },
+      {
+        "file": "types/index.ts",
+        "ranges": [
+          {
+            "start": 20,
+            "end": 20
+          }
+        ],
+        "before_hash": "21ad954fd15adf6656bcc876420cb405d59662ef340f29a157bf3c9f2518874f",
+        "after_hash": "e181cceb55fc322a8c7b6758015f64a60f94293592a55ea001bcd3b277d13359"
+      }
+    ]
+  },
+  "timing": {
+    "started_at": "2026-09-27T15:48:54.351Z",
+    "completed_at": "2026-09-27T15:48:58.025Z",
+    "duration_ms": 3674,
+    "measurement": "hook_wall_clock"
+  },
+  "tokens": {
+    "input": 0,
+    "output": 0,
+    "total": 0,
+    "model_calls": 0,
+    "measurement": "known-zero"
+  },
+  "telemetry": {
+    "schemaVersion": "mimosa-gate-telemetry/v1",
+    "profile": "gate",
+    "operation": "Stop",
+    "outcome": "partial/INCONCLUSIVE",
+    "latencyMs": 3674,
+    "peakMemoryBytes": 86577152,
+    "memoryMeasurement": "max-observed-process-rss",
+    "scannedFiles": 0,
+    "cache": {
+      "hits": 0,
+      "misses": 0,
+      "measurement": "not-applicable"
+    },
+    "denyCount": 0,
+    "tokens": {
+      "input": 0,
+      "output": 0,
+      "total": 0,
+      "modelCalls": 0,
+      "measurement": "known-zero"
+    }
+  },
+  "finding_count": 0,
+  "rewake_finding_count": 0,
+  "evidence_boundary": {
+    "scan": "candidate",
+    "static_fix_verification": "observed_static_only",
+    "runtime_verification": "not_performed"
+  },
+  "finding_events": [],
+  "findings": [],
+  "artifacts": {
+    "immutable_report": ".mimosa/reports/task-review-sess_07d159ef-c541-4a24-ad79-7ada92707e4e-20260927T154858025Z-20820-8a9775da19d6.json",
+    "latest_report": ".mimosa/reports/task-review-sess_07d159ef-c541-4a24-ad79-7ada92707e4e.json",
+    "history_summary": ".mimosa/history/run-20260927T154858025Z-20820-8a9775da19d6.json"
+  }
+}

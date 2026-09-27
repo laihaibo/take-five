@@ -1,6 +1,7 @@
 import {
   app,
   BrowserWindow,
+  dialog,
   ipcMain,
   Tray,
   Menu,
@@ -11,9 +12,11 @@ import {
 import path from 'node:path';
 import fs from 'node:fs';
 import http from 'node:http';
+import zlib from 'node:zlib';
 import { fileURLToPath } from 'node:url';
 import {
   openDb,
+  closeDb,
   getSettings,
   setSettings,
   getTodayStats,
@@ -21,7 +24,7 @@ import {
   listBreakEvents,
   isInWorkHours,
 } from './db.mjs';
-import { createBreakTimer } from './timer.mjs';
+import { createBreakTimer, ACTIVITY_COPY } from './timer.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const outDir = path.join(__dirname, '..', 'out');
@@ -32,8 +35,23 @@ let breakWindow = null;
 let tray = null;
 let timer = null;
 let staticPort = null;
+let staticServer = null;
 let appBaseUrl = DEV_URL;
 
+const gotLock = app.requestSingleInstanceLock();
+if (!gotLock) {
+  app.quit();
+} else {
+  app.on('second-instance', () => {
+    if (!app.isReady()) return;
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.show();
+      mainWindow.focus();
+    } else {
+      createMainWindow();
+    }
+  });
+}
 const MIME = {
   '.html': 'text/html; charset=utf-8',
   '.js': 'text/javascript; charset=utf-8',
@@ -67,12 +85,14 @@ function isPortAlive(url, timeoutMs = 400) {
 }
 
 function startStaticServer(rootDir) {
+  const root = path.resolve(rootDir);
   return new Promise((resolve, reject) => {
     const server = http.createServer((req, res) => {
       try {
         const urlPath = decodeURIComponent((req.url || '/').split('?')[0]);
-        let filePath = path.normalize(path.join(rootDir, urlPath));
-        if (!filePath.startsWith(rootDir)) {
+        let filePath = path.resolve(path.join(root, urlPath));
+        const rel = path.relative(root, filePath);
+        if (rel === '..' || rel.startsWith('..' + path.sep) || path.isAbsolute(rel)) {
           res.writeHead(403).end('Forbidden');
           return;
         }
@@ -80,14 +100,12 @@ function startStaticServer(rootDir) {
           filePath = path.join(filePath, 'index.html');
         }
         if (!fs.existsSync(filePath)) {
-          // SPA fallback for client routes
-          const fallback = path.join(rootDir, 'index.html');
-          if (fs.existsSync(fallback) && urlPath.startsWith('/')) {
-            filePath = fallback;
-          } else {
+          // 仅对无扩展名的客户端路由回退 index.html；缺失的静态资源必须 404
+          if (path.extname(urlPath) || !fs.existsSync(path.join(root, 'index.html'))) {
             res.writeHead(404).end('Not found');
             return;
           }
+          filePath = path.join(root, 'index.html');
         }
         const ext = path.extname(filePath).toLowerCase();
         res.writeHead(200, {
@@ -102,6 +120,7 @@ function startStaticServer(rootDir) {
     server.on('error', reject);
     server.listen(0, '127.0.0.1', () => {
       const addr = server.address();
+      staticServer = server;
       resolve(addr.port);
     });
   });
@@ -122,32 +141,77 @@ async function resolveAppBase() {
   return `http://127.0.0.1:${staticPort}`;
 }
 
+// ---- 托盘图标：运行时生成 PNG（raw RGBA 位图在 Windows 上是 BGRA，通道序不可靠） ----
+
+const CRC_TABLE = (() => {
+  const t = new Int32Array(256);
+  for (let n = 0; n < 256; n++) {
+    let c = n;
+    for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
+    t[n] = c;
+  }
+  return t;
+})();
+
+function crc32(buf) {
+  let c = 0xffffffff;
+  for (let i = 0; i < buf.length; i++) {
+    c = CRC_TABLE[(c ^ buf[i]) & 0xff] ^ (c >>> 8);
+  }
+  return (c ^ 0xffffffff) >>> 0;
+}
+
+function pngChunk(type, data) {
+  const len = Buffer.alloc(4);
+  len.writeUInt32BE(data.length);
+  const body = Buffer.concat([Buffer.from(type, 'ascii'), data]);
+  const crc = Buffer.alloc(4);
+  crc.writeUInt32BE(crc32(body));
+  return Buffer.concat([len, body, crc]);
+}
+
+function encodePng(width, height, rgba) {
+  const stride = width * 4 + 1;
+  const raw = Buffer.alloc(stride * height);
+  for (let y = 0; y < height; y++) {
+    raw[y * stride] = 0; // filter: none
+    rgba.copy(raw, y * stride + 1, y * width * 4, (y + 1) * width * 4);
+  }
+  const ihdr = Buffer.alloc(13);
+  ihdr.writeUInt32BE(width, 0);
+  ihdr.writeUInt32BE(height, 4);
+  ihdr[8] = 8; // bit depth
+  ihdr[9] = 6; // color type: RGBA
+  return Buffer.concat([
+    Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+    pngChunk('IHDR', ihdr),
+    pngChunk('IDAT', zlib.deflateSync(raw)),
+    pngChunk('IEND', Buffer.alloc(0)),
+  ]);
+}
+
 function createTrayIcon() {
-  // 32x32 blue circle with glass highlight — generated PNG buffer
+  // 32x32 强调色圆点 + 边缘 alpha 渐隐，对应 --accent #34D399
   const size = 32;
-  const canvas = Buffer.alloc(size * size * 4);
-  const cx = size / 2;
-  const cy = size / 2;
+  const rgba = Buffer.alloc(size * size * 4);
+  const cx = (size - 1) / 2;
   const r = size / 2 - 1;
   for (let y = 0; y < size; y++) {
     for (let x = 0; x < size; x++) {
-      const dx = x - cx + 0.5;
-      const dy = y - cy + 0.5;
+      const dx = x - cx;
+      const dy = y - cx;
       const dist = Math.sqrt(dx * dx + dy * dy);
       const i = (y * size + x) * 4;
       if (dist <= r) {
-        // accent #7C9CFF
         const t = Math.max(0, 1 - dist / r);
-        canvas[i] = 124;
-        canvas[i + 1] = 156;
-        canvas[i + 2] = 255;
-        canvas[i + 3] = Math.round(255 * (0.55 + 0.45 * t));
-      } else {
-        canvas[i + 3] = 0;
+        rgba[i] = 52;
+        rgba[i + 1] = 211;
+        rgba[i + 2] = 153;
+        rgba[i + 3] = Math.round(255 * (0.55 + 0.45 * t));
       }
     }
   }
-  return nativeImage.createFromBuffer(canvas, { width: size, height: size });
+  return nativeImage.createFromBuffer(encodePng(size, size, rgba));
 }
 
 function trayTitleFromState(s) {
@@ -162,9 +226,14 @@ function trayTitleFromState(s) {
   return 'Take Five';
 }
 
+let lastTrayTip = '';
+
 function updateTray(s) {
   if (!tray) return;
-  tray.setToolTip(`Take Five · ${trayTitleFromState(s)}`);
+  const tip = `Take Five · ${trayTitleFromState(s)}`;
+  if (tip === lastTrayTip) return;
+  lastTrayTip = tip;
+  tray.setToolTip(tip);
   if (process.platform === 'win32') {
     tray.setTitle?.('');
   }
@@ -184,13 +253,22 @@ function createMainWindow() {
       preload: path.join(__dirname, 'preload.mjs'),
       contextIsolation: true,
       nodeIntegration: false,
-      sandbox: false,
+      sandbox: true,
     },
   });
 
   mainWindow.once('ready-to-show', () => {
     applyAlwaysOnTop();
     mainWindow.show();
+  });
+
+  mainWindow.webContents.on('did-fail-load', (_e, code, desc, url, isMain) => {
+    if (isMain && !app.isQuitting) {
+      dialog.showErrorBox(
+        'Take Five',
+        `界面加载失败（${code} ${desc}）\n${url}\n\n请先运行 pnpm build 生成 out/，或用 pnpm dev 启动开发服务器。`
+      );
+    }
   });
 
   mainWindow.on('close', (e) => {
@@ -242,7 +320,7 @@ function createBreakWindow(state) {
       preload: path.join(__dirname, 'preload.mjs'),
       contextIsolation: true,
       nodeIntegration: false,
-      sandbox: false,
+      sandbox: true,
     },
   });
 
@@ -262,12 +340,12 @@ function closeBreakWindow() {
 }
 
 function notify(state) {
-  if (!getSettings().soundEnabled) return;
   if (!Notification.isSupported()) return;
+  // soundEnabled 只关提示音，不能连休息提醒本身一起吞掉
   const n = new Notification({
     title: 'Take Five',
     body: `${state.suggestedActivity?.label || '休息'}一下吧 — 已专注 ${state.plannedMinutes} 分钟`,
-    silent: false,
+    silent: !getSettings().soundEnabled,
   });
   n.show();
 }
@@ -288,10 +366,75 @@ function broadcast(state) {
     } else if (!breakWindow.isVisible()) {
       breakWindow.show();
     }
-  } else if (state.mode === 'break' || state.mode === 'focus' || state.mode === 'idle') {
-    // keep break window only in break-prompt; auto-close when resolved
-    if (state.mode !== 'break-prompt') closeBreakWindow();
+  } else {
+    // break-prompt 结束即收起全屏层
+    closeBreakWindow();
   }
+}
+
+// ---- IPC 输入校验 ----
+
+const HM_RE = /^([01]?\d|2[0-3]):[0-5]\d$/;
+const THEMES = new Set(['light', 'dark', 'system']);
+const NUM_BOUNDS = {
+  focusMinutes: [1, 180],
+  breakMinutes: [1, 60],
+  maxPostpones: [0, 10],
+};
+const BOOL_KEYS = [
+  'strictMode',
+  'soundEnabled',
+  'workEnabled',
+  'weekdaysOnly',
+  'quietHoursEnabled',
+  'autostartFocus',
+  'alwaysOnTop',
+];
+const HM_KEYS = ['workStart', 'workEnd', 'quietHoursStart', 'quietHoursEnd'];
+
+function clampInt(v, min, max) {
+  const n = Math.round(Number(v));
+  if (!Number.isFinite(n)) return null;
+  return Math.min(max, Math.max(min, n));
+}
+
+function sanitizeSettingsPatch(patch) {
+  if (!patch || typeof patch !== 'object' || Array.isArray(patch)) return {};
+  const out = {};
+  for (const [key, [min, max]] of Object.entries(NUM_BOUNDS)) {
+    if (key in patch) {
+      const n = clampInt(patch[key], min, max);
+      if (n !== null) out[key] = n;
+    }
+  }
+  if (Array.isArray(patch.postponeOptions)) {
+    const opts = [
+      ...new Set(
+        patch.postponeOptions
+          .map((n) => clampInt(n, 1, 120))
+          .filter((n) => n !== null)
+      ),
+    ]
+      .sort((a, b) => a - b)
+      .slice(0, 5);
+    if (opts.length) out.postponeOptions = opts;
+  }
+  if (Array.isArray(patch.activities)) {
+    const acts = [
+      ...new Set(patch.activities.map(String).filter((id) => id in ACTIVITY_COPY)),
+    ];
+    if (acts.length) out.activities = acts;
+  }
+  for (const key of BOOL_KEYS) {
+    if (key in patch) out[key] = patch[key] === true || patch[key] === 'true';
+  }
+  for (const key of HM_KEYS) {
+    if (key in patch && typeof patch[key] === 'string' && HM_RE.test(patch[key])) {
+      out[key] = patch[key];
+    }
+  }
+  if ('theme' in patch && THEMES.has(patch.theme)) out.theme = patch.theme;
+  return out;
 }
 
 function setupIpc() {
@@ -339,14 +482,18 @@ function setupIpc() {
   });
   ipcMain.handle('settings:get', () => getSettings());
   ipcMain.handle('settings:set', (_e, patch) => {
-    const next = setSettings(patch);
+    const clean = sanitizeSettingsPatch(patch);
+    const next = Object.keys(clean).length ? setSettings(clean) : getSettings();
     timer.applySettings();
-    if ('alwaysOnTop' in (patch || {})) applyAlwaysOnTop();
+    if ('alwaysOnTop' in clean) applyAlwaysOnTop();
     return next;
   });
   ipcMain.handle('stats:today', () => getTodayStats());
   ipcMain.handle('stats:week', () => getWeekStats());
-  ipcMain.handle('stats:events', (_e, limit) => listBreakEvents(limit || 100));
+  ipcMain.handle('stats:events', (_e, limit) => {
+    const n = Math.round(Number(limit));
+    return listBreakEvents(Number.isFinite(n) ? Math.min(500, Math.max(1, n)) : 100);
+  });
   ipcMain.handle('window:show-main', () => {
     if (!mainWindow) createMainWindow();
     mainWindow.show();
@@ -416,12 +563,20 @@ function createTray() {
 }
 
 app.whenReady().then(async () => {
-  openDb();
+  if (!gotLock) return;
+  try {
+    openDb();
+  } catch (err) {
+    dialog.showErrorBox('Take Five', `数据库初始化失败：\n${err?.message || err}`);
+    app.quit();
+    return;
+  }
   try {
     appBaseUrl = await resolveAppBase();
   } catch (err) {
-    console.error(err);
-    appBaseUrl = DEV_URL;
+    dialog.showErrorBox('Take Five', String(err?.message || err));
+    app.quit();
+    return;
   }
   timer = createBreakTimer(broadcast);
   setupIpc();
@@ -446,6 +601,11 @@ app.on('window-all-closed', () => {
 
 app.on('before-quit', () => {
   app.isQuitting = true;
+  if (staticServer) {
+    staticServer.close();
+    staticServer = null;
+  }
+  closeDb();
 });
 
 app.on('activate', () => {

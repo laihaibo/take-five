@@ -17,7 +17,7 @@ export type ActivityId =
 export type ThemeMode = 'light' | 'dark' | 'system';
 
 export interface ActivityCopy {
-  id: ActivityId | string;
+  id: ActivityId;
   label: string;
   hint: string;
 }
@@ -56,7 +56,6 @@ export interface TimerState {
   suggestedActivities: ActivityCopy[];
   postponeCount: number;
   maxPostpones: number;
-  activityCopy: Record<string, { label: string; hint: string }>;
   quiet: boolean;
   inWorkHours: boolean;
   cycle: number;
@@ -97,7 +96,6 @@ export interface BreakEvent {
 export interface TakeFiveApi {
   getState: () => Promise<TimerState>;
   onState: (cb: (state: TimerState) => void) => () => void;
-  onBreakDue: (cb: (state: TimerState) => void) => () => void;
   startFocus: () => Promise<TimerState>;
   pause: () => Promise<TimerState>;
   resume: () => Promise<TimerState>;

@@ -26,7 +26,7 @@ pnpm rebuild            # build && start
   ```
   `.npmrc` 已配 mirror；`pnpm-workspace.yaml` 的 `allowBuilds`/`onlyBuiltDependencies` 放行 electron。
 - **`next.config.mjs` 是 `output: 'export'`**：没有 API routes / server components 运行时。一切数据走 IPC。`trailingSlash: true`，静态路由为 `/stats/`、`/settings/`。
-- **计时器在主进程**（`electron/timer.mjs`，250ms tick），渲染进程只订阅。不要在 React 里做倒计时权威源。
+- **计时器在主进程**（`electron/timer.mjs`，250ms tick + 30s 工作时段看门狗），渲染进程只订阅。不要在 React 里做倒计时权威源；`checkWorkBoundary` 依赖看门狗才能在 idle/paused 下触发，别只挂在快速 tick 上。
 - **休息全屏层**是同一入口 `/?view=break`（另开 BrowserWindow），不是独立路由页。
 
 ## 架构
@@ -38,8 +38,9 @@ pnpm rebuild            # build && start
 | `electron/db.mjs` | `node:sqlite`（`DatabaseSync`），settings + focus_sessions + break_events |
 | `electron/preload.mjs` | `contextBridge` → `window.takeFive` |
 | `app/` | Next App Router UI（今日 / stats / settings） |
-| `components/` | nav / nav-active / theme-provider / ui（GlassPanel、ProgressRing 等复用件） |
+| `components/` | nav / theme-provider / ui（GlassPanel、ProgressRing 等复用件） |
 | `lib/hooks.ts` | 渲染侧只经 `window.takeFive` 调主进程 |
+| `lib/activities.ts` | 休息动作 id+label 单一来源（与 `timer.mjs` 的 `ACTIVITY_COPY` 保持一致） |
 | `types/index.ts` | TimerState / Settings / TakeFiveApi 单一类型源 |
 | `app/globals.css` | 全部设计 token（浅/深主题 CSS 变量；默认绿色 accent） |
 | `DESIGN.md` | 视觉/产品规范，改 UI 前先对齐 |
@@ -50,6 +51,6 @@ DB 文件在 Electron `userData` 下的 `take-five.db`（非仓库内）。默�
 
 - UI 无 Tailwind / 组件库；Liquid Glass 用 CSS 变量 + `.glass`。新增样式进 `globals.css`，别引入第二套色板。
 - 改设置字段时同步三处：`db.mjs` DEFAULTS + getSettings、`types/index.ts` Settings、设置页 UI。
-- 新休息动作：扩展 `timer.mjs` 的 `ACTIVITY_COPY` 与设置页 `ALL_ACTIVITIES`，id 保持稳定字符串。
+- 新休息动作：扩展 `timer.mjs` 的 `ACTIVITY_COPY` 与 `lib/activities.ts`（两处 id 必须一致），id 保持稳定字符串。
 - 产品语言为中文；`window.takeFive` 为唯一桌面 API 面。
 - TS 导入用 `@/*` 别名（`tsconfig.json` paths → 仓库根）。`tsconfig` 的 `exclude` 含 `electron/`：主进程是纯 `.mjs`，不在 `pnpm typecheck` 覆盖范围内，改完需启动实测。

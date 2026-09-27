@@ -7,11 +7,6 @@ contextBridge.exposeInMainWorld('takeFive', {
     ipcRenderer.on('timer:state', handler);
     return () => ipcRenderer.removeListener('timer:state', handler);
   },
-  onBreakDue: (cb) => {
-    const handler = (_e, state) => cb(state);
-    ipcRenderer.on('timer:break-due', handler);
-    return () => ipcRenderer.removeListener('timer:break-due', handler);
-  },
   startFocus: () => ipcRenderer.invoke('timer:start-focus'),
   pause: () => ipcRenderer.invoke('timer:pause'),
   resume: () => ipcRenderer.invoke('timer:resume'),

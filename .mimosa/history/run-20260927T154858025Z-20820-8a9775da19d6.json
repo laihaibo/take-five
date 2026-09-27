@@ -1,0 +1,50 @@
+{
+  "schemaVersion": "mimosa-finding-history/v1",
+  "runId": "20260927T154858025Z-20820-8a9775da19d6",
+  "runStatus": "inconclusive",
+  "errors": [
+    "scan:types/index.ts: scanner_failed: spawnSync C:\\nvm4w\\nodejs\\node.exe ETIMEDOUT",
+    "scan:lib/activities.ts: scanner_failed: spawnSync C:\\nvm4w\\nodejs\\node.exe ETIMEDOUT",
+    "scan:lib/hooks.ts: scanner_failed: spawnSync C:\\nvm4w\\nodejs\\node.exe ETIMEDOUT",
+    "scan:components/ui.tsx: scanner_failed: spawnSync C:\\nvm4w\\nodejs\\node.exe ETIMEDOUT",
+    "scan:components/theme-provider.tsx: scanner_failed: spawnSync C:\\nvm4w\\nodejs\\node.exe ETIMEDOUT",
+    "scan:components/nav.tsx: scanner_failed: spawnSync C:\\nvm4w\\nodejs\\node.exe ETIMEDOUT",
+    "scan:app/layout.tsx: scanner_failed: spawnSync C:\\nvm4w\\nodejs\\node.exe ETIMEDOUT",
+    "scan:app/settings/page.tsx: scanner_failed: spawnSync C:\\nvm4w\\nodejs\\node.exe ETIMEDOUT",
+    "scan:app/stats/page.tsx: scanner_failed: spawnSync C:\\nvm4w\\nodejs\\node.exe ETIMEDOUT",
+    "scan:app/page.tsx: scanner_failed: spawnSync C:\\nvm4w\\nodejs\\node.exe ETIMEDOUT",
+    "agent-check:.: stop_budget_exhausted: focused agent configuration check was not run before the gate budget"
+  ],
+  "target": ".",
+  "revision": "2d311666cfee70f5288caa9ee099484411bf0e5c",
+  "diffHash": "3a9c96296059e9b155a985b176b767918a87938a3293339c6b2d08d21aa253bf",
+  "rulesVersion": "unavailable",
+  "recordedAt": "2026-09-27T15:48:58.025Z",
+  "timing": {
+    "startedAt": "2026-09-27T15:48:54.351Z",
+    "completedAt": "2026-09-27T15:48:58.025Z",
+    "durationMs": 3674
+  },
+  "tokens": {
+    "input": 0,
+    "output": 0,
+    "total": 0,
+    "modelCalls": 0,
+    "measurement": "known-zero"
+  },
+  "findings": {
+    "total": 0,
+    "bySeverity": {},
+    "byStatus": {}
+  },
+  "coverage": {
+    "status": "partial",
+    "reasonCounts": {
+      "scanner_failed": 10,
+      "stop_budget_exhausted": 1,
+      "project_check_failed": 11
+    }
+  },
+  "evidenceBoundary": "static_only",
+  "immutableReport": ".mimosa/reports/task-review-sess_07d159ef-c541-4a24-ad79-7ada92707e4e-20260927T154858025Z-20820-8a9775da19d6.json"
+}

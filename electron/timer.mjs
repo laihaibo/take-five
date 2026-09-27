@@ -5,6 +5,7 @@ import {
   insertBreakEvent,
   isInQuietHours,
   isInWorkHours,
+  minutesUntilRangeEnd,
 } from './db.mjs';
 
 export const ACTIVITY_COPY = {
@@ -26,22 +27,6 @@ function pick(list) {
   return list?.length ? list[Math.floor(Math.random() * list.length)] : 'eyes';
 }
 
-function minutesUntilQuietEnd(s, now = new Date()) {
-  if (!s.quietHoursEnabled) return 0;
-  const [sh, sm] = s.quietHoursStart.split(':').map(Number);
-  const [eh, em] = s.quietHoursEnd.split(':').map(Number);
-  const start = sh * 60 + sm;
-  const end = eh * 60 + em;
-  const mins = now.getHours() * 60 + now.getMinutes();
-  if (start <= end) {
-    if (mins >= start && mins < end) return end - mins;
-    return 0;
-  }
-  if (mins >= start) return 24 * 60 - mins + end;
-  if (mins < end) return end - mins;
-  return 0;
-}
-
 export function createBreakTimer(onState) {
   const listeners = new Set(onState ? [onState] : []);
   const state = {
@@ -56,7 +41,6 @@ export function createBreakTimer(onState) {
     focusSessionId: null,
     suggestedActivity: 'eyes',
     postponeCount: 0,
-    maxPostpones: 3,
     afterPostpone: false,
     cycle: 0,
     checkedActivities: new Set(['eyes']),
@@ -66,16 +50,25 @@ export function createBreakTimer(onState) {
   let lastTick = Date.now();
   let lastInWorkHours = null;
 
+  // suggestedActivities 缓存：settings.activities 未变时保持同一数组实例，
+  // 渲染层据此对 chips 做 memo，避免 250ms 推送触发无谓重渲染
+  let actsKey = null;
+  let actsCache = [];
+
   function getActCopy(id) {
     return ACTIVITY_COPY[id] || ACTIVITY_COPY.eyes;
   }
 
   function snapshot() {
     const s = getSettings();
-    const acts = (s.activities || ['eyes']).map((id) => ({
-      id,
-      ...getActCopy(id),
-    }));
+    const key = (s.activities || []).join(',');
+    if (key !== actsKey) {
+      actsKey = key;
+      actsCache = (s.activities || ['eyes']).map((id) => ({
+        id,
+        ...getActCopy(id),
+      }));
+    }
     const total =
       state.mode === 'break'
         ? state.breakMinutes * 60_000
@@ -94,10 +87,9 @@ export function createBreakTimer(onState) {
         id: state.suggestedActivity,
         ...getActCopy(state.suggestedActivity),
       },
-      suggestedActivities: acts,
+      suggestedActivities: actsCache,
       postponeCount: state.postponeCount,
       maxPostpones: s.maxPostpones,
-      activityCopy: ACTIVITY_COPY,
       quiet: isInQuietHours(s),
       inWorkHours: isInWorkHours(s),
       cycle: state.cycle,
@@ -160,20 +152,9 @@ export function createBreakTimer(onState) {
     cleanupFocus('completed');
     const s = getSettings();
 
-    // 午休等安静时段：不弹窗，顺延到安静结束
+    // 午休等安静时段：不弹窗、不记用户推迟，顺延到安静结束后继续专注
     if (isInQuietHours(s)) {
-      const wait = Math.max(5, minutesUntilQuietEnd(s));
-      insertBreakEvent({
-        scheduledAt: new Date().toISOString(),
-        promptedAt: new Date().toISOString(),
-        resolvedAt: new Date().toISOString(),
-        action: 'postponed',
-        activity: state.suggestedActivity,
-        postponeMinutes: wait,
-        postponeCount: state.postponeCount + 1,
-        note: 'quiet-hours',
-      });
-      state.postponeCount += 1;
+      const wait = Math.max(5, minutesUntilRangeEnd(s.quietHoursStart, s.quietHoursEnd));
       state.plannedMinutes = wait;
       state.mode = 'focus';
       state.afterPostpone = true;
@@ -181,7 +162,6 @@ export function createBreakTimer(onState) {
       state.sessionEndsAt = new Date(Date.now() + wait * 60_000).toISOString();
       state.remainingMs = wait * 60_000;
       state.elapsedMs = 0;
-      state.focusSessionId = null;
       startInterval();
       emit();
       return;
@@ -228,12 +208,11 @@ export function createBreakTimer(onState) {
   }
 
   function tick() {
-    const s = getSettings();
     const now = Date.now();
     const delta = now - lastTick;
     lastTick = now;
 
-    checkWorkBoundary(s);
+    checkWorkBoundary();
     // endWorkday may have switched mode
     if (state.mode === 'idle') return;
 
@@ -250,12 +229,22 @@ export function createBreakTimer(onState) {
     emit();
   }
 
+  /**
+   * 边界看门狗：idle / paused / break-prompt 下快速 tick 已停止，
+   * 没有它跨 workEnd/workStart 的清空与 autostart 永远不会触发，
+   * 且 lastInWorkHours 隔夜陈旧会误伤次日新开的会话。
+   */
+  function startBoundaryWatchdog() {
+    setInterval(() => {
+      if (!interval) checkWorkBoundary();
+    }, 30_000);
+  }
+
   function startFocus() {
     cleanupFocus('interrupted');
     const s = getSettings();
     state.plannedMinutes = s.focusMinutes;
     state.breakMinutes = s.breakMinutes;
-    state.maxPostpones = s.maxPostpones;
     state.mode = 'focus';
     state.previousMode = null;
     state.afterPostpone = false;
@@ -266,6 +255,8 @@ export function createBreakTimer(onState) {
     state.remainingMs = s.focusMinutes * 60_000;
     state.elapsedMs = 0;
     state.postponeCount = 0;
+    state.suggestedActivity = pick(s.activities);
+    state.checkedActivities = new Set([state.suggestedActivity]);
     state.focusSessionId = insertFocusSession({
       startedAt: state.sessionStartedAt,
       plannedMinutes: s.focusMinutes,
@@ -292,6 +283,9 @@ export function createBreakTimer(onState) {
   function postponeBreak(minutes) {
     if (state.mode !== 'break-prompt') return;
     const s = getSettings();
+    // 约束在主进程设防，渲染层只是先行禁用
+    if (s.strictMode) return;
+    if (state.postponeCount >= s.maxPostpones) return;
     const opts = s.postponeOptions?.length ? s.postponeOptions : [5, 10, 15];
     const mins = opts.includes(Number(minutes)) ? Number(minutes) : opts[0];
     state.postponeCount += 1;
@@ -311,7 +305,6 @@ export function createBreakTimer(onState) {
     state.sessionEndsAt = new Date(Date.now() + mins * 60_000).toISOString();
     state.remainingMs = mins * 60_000;
     state.elapsedMs = 0;
-    state.focusSessionId = null;
     startInterval();
     emit();
   }
@@ -336,16 +329,10 @@ export function createBreakTimer(onState) {
     emit();
   }
 
-  function setCheckedActivities(ids) {
-    state.checkedActivities = new Set(ids || []);
-    emit();
-  }
-
   function completeBreak(natural = false, checked) {
     stopInterval();
-    const seconds = natural
-      ? Math.round(state.breakMinutes * 60)
-      : Math.max(1, Math.round(state.elapsedMs / 1000));
+    // 统一按实际经过时长记账（自然结束时 elapsedMs ≈ 配置时长，中途改设置也不失真）
+    const seconds = Math.max(1, Math.round(state.elapsedMs / 1000));
     const list =
       checked && checked.length
         ? checked
@@ -420,12 +407,9 @@ export function createBreakTimer(onState) {
     emit();
   }
 
-  /** 上班边界：残留状态兜底清空；可选自动开始 */
+  /** 上班边界：只负责 idle 下的可选 autostart；残留清空由下班侧 endWorkday 完成 */
   function enterWorkday(s = getSettings()) {
-    if (state.mode !== 'idle') {
-      endWorkday();
-    }
-    if (s.autostartFocus && isInWorkHours(s)) {
+    if (state.mode === 'idle' && s.autostartFocus && isInWorkHours(s)) {
       startFocus();
     } else {
       emit();
@@ -450,14 +434,13 @@ export function createBreakTimer(onState) {
   }
 
   function applySettings() {
-    const s = getSettings();
-    state.maxPostpones = s.maxPostpones;
     if (state.mode === 'idle') {
+      const s = getSettings();
       state.plannedMinutes = s.focusMinutes;
       state.breakMinutes = s.breakMinutes;
       state.remainingMs = s.focusMinutes * 60_000;
     }
-    checkWorkBoundary(s);
+    checkWorkBoundary();
     emit();
   }
 
@@ -465,7 +448,6 @@ export function createBreakTimer(onState) {
     const s = getSettings();
     state.plannedMinutes = s.focusMinutes;
     state.breakMinutes = s.breakMinutes;
-    state.maxPostpones = s.maxPostpones;
     state.remainingMs = s.focusMinutes * 60_000;
     state.mode = 'idle';
     lastInWorkHours = isInWorkHours(s);
@@ -473,6 +455,7 @@ export function createBreakTimer(onState) {
   }
 
   initIdle();
+  startBoundaryWatchdog();
 
   return {
     subscribe,
@@ -483,7 +466,6 @@ export function createBreakTimer(onState) {
     skip: skipBreak,
     completeBreak,
     toggleCheckedActivity,
-    setCheckedActivities,
     pause,
     resume,
     reset,

@@ -17,8 +17,9 @@
 ### 3a. Color
 
 - **Neutral scale (dark primary):** `--n-950 #0A0C10`, `--n-900 #12151C`, `--n-800 #1A1F2A`, `--n-700 #2A3140`, `--n-500 #6B7385`, `--n-300 #A8B0C0`, `--n-100 #E8ECF4`, `--n-50 #F7F9FC`
-- **Accent:** `--accent #7C9CFF`（专注/主行动，偏冷蓝紫，像深夜屏幕边缘）
-- **Accent warm:** `--break #6EE7B7`（休息态，薄荷绿——与专注形成明确语义切换）
+- **Accent:** `--accent #34D399`（专注/主行动，翠绿；浅色主题 `#059669`）
+- **Accent break:** `--break #6EE7B7`（休息态，薄荷绿——与专注形成明确语义切换；浅色 `#0D9488`）
+- **Neutral fills/borders:** `--fill-1/2/3/4` 与 `--line-strong`（中性灰玻璃填充与描边 token，禁止散写 rgba）
 - **Semantic:** `--warn #FBBF24`（推迟次数）, `--error #F87171`
 - **Usage rules:** 专注态强调色只出现在进度环与主按钮；休息态整块玻璃染 `--break` 低透明度；禁止整页铺 accent。
 
@@ -27,7 +28,7 @@
 - **Display:** `SF Pro Display, "Segoe UI Variable Display", "Segoe UI", system-ui` — 大号倒计时数字，600，`tabular-nums`，tracking `-0.02em`
 - **Body:** `SF Pro Text, "Segoe UI", system-ui` — 400/500
 - **Fallback stack:** 同上；Windows 以 Segoe UI Variable / Segue UI 兜底，布局不依赖 SF 专有度量
-- **Type scale:** `12 / 14 / 16 / 18 / 22 / 28 / 40 / 64 / 96`
+- **Type scale:** `12 / 13 / 14 / 15 / 28 / 32 / 48`（48 为环形倒计时数字）
 - **Weight discipline:** 倒计时与主标题 600；正文 400；标签/元数据 500 且字号 ≤14；禁止 700+ 正文。
 
 ### 3c. Spacing & rhythm
@@ -40,12 +41,12 @@
 
 - **Glass panel:** `background: rgba(255,255,255,0.08–0.14)` + `backdrop-filter: blur(40px) saturate(180%)` + `1px solid rgba(255,255,255,0.18)` + 顶部内高光 `inset 0 1px 0 rgba(255,255,255,0.25)`；圆角 20–28px。
 - **Button:** 三档 — Ghost（推迟/次要）、Soft Glass（动作芯片）、Filled Accent（开始休息/开始专注）。高度 40–48，圆角 999 或 14。
-- **Progress ring:** 本产品的签名元素——SVG 双环，外环剩余时间，内环小呼吸点。
+- **Progress ring:** 本产品的签名元素——SVG 单环（220px，stroke 10，尺寸真源 `.ring-wrap`）+ 中央倒计时文字；进度不做 dashoffset 补间（250ms 推送追不上补间）。
 - **Iconography:** 线性 24px，stroke 1.5，仅用于休息动作；无 emoji 当图标。
 
 ## 4. Accessibility
 
-- **Text contrast:** 玻璃上正文 ≥ 4.5:1（用 `--n-100` 对深底）；大数字 ≥ 3:1。
+- **Text contrast:** 玻璃上正文与元数据（`--text` / `--text-dim` / `--text-faint`）≥ 4.5:1；大数字 ≥ 3:1。
 - **Motion:** 默认尊重 `prefers-reduced-motion`；环与光晕可关，信息不依赖动画。
 - **Focus indicators:** `outline: 2px solid var(--accent)` + offset 2px；禁止 `outline: none` 无替代。
 - **Alt text policy:** 纯装饰渐变无 alt；统计图为可读文本/`aria-label` 摘要。
@@ -99,13 +100,13 @@
 | 维度 | 原始 | 完善后 |
 |------|------|--------|
 | 触发 | 每 50 分钟提醒 | 专注会话 50min → 进入休息提示；可配置 |
-| 动作 | 上厕所/远眺/喝水 | 四选可开关：上厕所、远眺、喝水、伸展 |
+| 动作 | 上厕所/远眺/喝水 | 12 项动作可开关（单源：`lib/activities.ts` + `timer.mjs ACTIVITY_COPY`） |
 | 推迟 | 可推迟 | 5/10/15 分钟三档 + 次数上限温和提示（默认 3） |
 | 记录 | 记录 | SQLite：专注会话、休息事件、推迟/跳过/完成 |
 | 反馈 | 无 | 今日环 + 本周完成率/推迟次数 |
 | 常驻 | 无 | 系统托盘：剩余时间、一键推迟、暂停 |
 | 打扰 | 可能过猛 | 默认可推迟；可选严格模式；安静时段 |
-| 风格 | Apple + liquid glass | 深色空间玻璃：专注冷蓝 / 休息薄荷，签名进度环 |
+| 风格 | Apple + liquid glass | 深色空间玻璃：专注翠绿 / 休息薄荷，签名进度环 |
 
 ### 状态机
 
